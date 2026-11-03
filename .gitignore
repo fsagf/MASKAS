@@ -1,0 +1,14 @@
+venv/
+__pycache__/
+*.pyc
+*.db
+*.sqlite3
+data/*.db
+data/trades.db
+data/equity_chart.html
+data/trades_export.csv
+*.log
+.system_generated/
+tmp_yaml/
+.pytest_cache/
+

@@ -1,0 +1,13 @@
+flet==0.25.2
+SQLAlchemy>=2.0.0
+pandas>=2.0.0
+plotly>=5.18.0
+pyinstaller>=6.4.0
+pillow>=10.0.0
+httpx>=0.24.0
+yfinance>=0.2.30
+ccxt>=4.0.0
+cryptography>=41.0.0
+pyngrok>=7.0.0
+# MetaTrader5 (опционально для Windows x64 с Python <= 3.12)
+# MetaTrader5>=5.0.0; python_version <= '3.12'
