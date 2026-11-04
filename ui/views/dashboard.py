@@ -538,82 +538,72 @@ class DashboardView(ft.Container):
             tooltip_max_content_width=220,
             tooltip_fit_inside_horizontally=True,
             tooltip_fit_inside_vertically=True,
-            height=145,
-            expand=True,
+            height=175,
         )
 
         return ft.Container(
-            content=ft.Row(
+            content=ft.Column(
                 controls=[
-                    # Левая колонка: компактный инфо-блок (expand=2)
-                    ft.Container(
-                        content=ft.Column(
-                            controls=[
-                                ft.Row(
-                                    controls=[
-                                        ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, color=ACCENT_PRIMARY, size=24),
-                                        ft.Text("Симуляция Монте-Карло", size=15, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
-                                        ft.Container(
-                                            content=ft.Text("10 000 ИТЕРАЦИЙ", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
-                                            bgcolor=ft.Colors.with_opacity(0.14, ACCENT_PRIMARY),
-                                            padding=ft.padding.symmetric(horizontal=8, vertical=2),
-                                            border_radius=RADIUS_SM,
-                                            border=ft.border.all(1, ft.Colors.with_opacity(0.3, ACCENT_PRIMARY)),
-                                        ),
-                                    ],
-                                    spacing=8,
-                                ),
-                                ft.Text(
-                                    "Векторный бутстрэп 10 000 возможных траекторий депозита на 20 шагов вперед. "
-                                    "Расчет риска банкротства, 95% доверительного интервала и ожидаемого роста.",
-                                    size=11,
-                                    color=TEXT_SECONDARY,
-                                    font_family=FONT_FAMILY,
-                                ),
-                                ft.Container(height=4),
-                                ft.Row(
-                                    controls=[
-                                        self._metric_mini_box("Risk of Ruin", f"< {mc['risk_of_ruin']}%", PROFIT if mc["risk_of_ruin"] < 5 else LOSS),
-                                        self._metric_mini_box("95% VaR Max DD", f"-{mc['var_95_max_dd']}%", LOSS),
-                                        self._metric_mini_box("Expectancy Run", f"{mc['expectancy_run']:+,.1f}%", PROFIT if mc["expectancy_run"] >= 0 else LOSS),
-                                    ],
-                                    spacing=8,
-                                ),
-                            ],
-                            spacing=6,
-                        ),
-                        expand=2,
+                    # 1. Шапка симуляции
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, color=ACCENT_PRIMARY, size=20),
+                                    ft.Text("Симуляция Монте-Карло", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                ],
+                                spacing=6,
+                            ),
+                            ft.Container(
+                                content=ft.Text("10 000 ИТЕРАЦИЙ", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                bgcolor=ft.Colors.with_opacity(0.14, ACCENT_PRIMARY),
+                                padding=ft.padding.symmetric(horizontal=7, vertical=2),
+                                border_radius=RADIUS_SM,
+                                border=ft.border.all(1, ft.Colors.with_opacity(0.3, ACCENT_PRIMARY)),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
 
-                    ft.VerticalDivider(width=1, color=BORDER_SUBTLE),
+                    # 2. Метрики риска в 3 колонки без наслоений
+                    ft.Row(
+                        controls=[
+                            self._metric_mini_box("Risk of Ruin", f"< {mc['risk_of_ruin']}%", PROFIT if mc["risk_of_ruin"] < 5 else LOSS),
+                            self._metric_mini_box("95% VaR Max DD", f"-{mc['var_95_max_dd']}%", LOSS),
+                            self._metric_mini_box("Expectancy Run", f"{mc['expectancy_run']:+,.1f}%", PROFIT if mc["expectancy_run"] >= 0 else LOSS),
+                        ],
+                        spacing=8,
+                    ),
 
-                    # Правая колонка: интерактивный веер траекторий (expand=3)
-                    ft.Container(
-                        content=ft.Column(
-                            controls=[
-                                ft.Row(
-                                    controls=[
-                                        ft.Row(
-                                            controls=[
-                                                ft.Icon(ft.Icons.TIMELINE_ROUNDED, size=14, color=ACCENT_PRIMARY),
-                                                ft.Text("Веер траекторий капитала (20 шагов)", size=11, color=TEXT_SECONDARY, font_family=FONT_MONO),
-                                            ],
-                                            spacing=6,
-                                        ),
-                                        ft.Text("P95 (Бычий) → P05 (Стресс-тест)", size=10, color=ACCENT_PRIMARY, font_family=FONT_MONO),
-                                    ],
-                                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                                ),
-                                cone_chart,
-                            ],
-                            spacing=6,
-                            expand=True,
-                        ),
-                        expand=3,
+                    ft.Divider(color=BORDER_SUBTLE, height=10),
+
+                    # 3. Подзаголовок графика веера
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.TIMELINE_ROUNDED, size=13, color=ACCENT_PRIMARY),
+                                    ft.Text("Веер траекторий капитала (20 шагов)", size=11, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                                ],
+                                spacing=5,
+                            ),
+                            ft.Text("P95 (Бычий) → P05 (Стресс)", size=9, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+
+                    # 4. Полноразмерный график веера вероятностей
+                    cone_chart,
+
+                    # 5. Описание метода бутстрэпа
+                    ft.Text(
+                        "Векторный бутстрэп 10 000 траекторий депозита • 95% доверительный интервал",
+                        size=10,
+                        color=TEXT_MUTED,
+                        font_family=FONT_FAMILY,
                     ),
                 ],
-                spacing=14,
-                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                spacing=8,
             ),
             gradient=ft.LinearGradient(
                 begin=ft.alignment.top_left,
@@ -630,15 +620,16 @@ class DashboardView(ft.Container):
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Text(label, size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                    ft.Text(label, size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
                     ft.Text(val, size=12, weight=ft.FontWeight.BOLD, color=color, font_family=FONT_MONO),
                 ],
                 spacing=2,
-                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             ),
-            padding=ft.padding.symmetric(horizontal=10, vertical=6),
             bgcolor=SURFACE_2,
+            padding=ft.padding.symmetric(horizontal=8, vertical=6),
             border_radius=RADIUS_SM,
+            border=ft.border.all(1, BORDER_SUBTLE),
+            expand=True,
         )
 
     def _on_tilt_toggle(self, _):

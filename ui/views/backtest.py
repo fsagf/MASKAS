@@ -152,6 +152,7 @@ class BacktestView(ft.Container):
                     self.chart_canvas,
                 ],
                 spacing=0,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             ),
             height=465,
             expand=True,
@@ -426,6 +427,7 @@ class BacktestView(ft.Container):
                     self.chart_container,
                 ],
                 spacing=10,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             ),
             bgcolor=SURFACE_1,
             border=ft.border.all(1, BORDER_SUBTLE),
@@ -454,6 +456,7 @@ class BacktestView(ft.Container):
                     self.trades_listview,
                 ],
                 spacing=8,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             ),
             bgcolor=SURFACE_1,
             border=ft.border.all(1, BORDER_SUBTLE),
@@ -471,6 +474,7 @@ class BacktestView(ft.Container):
             ],
             spacing=12,
             scroll=ft.ScrollMode.AUTO,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         )
 
     def _build_mini_card(self, title: str, text_ctl: ft.Text, subtitle: Union[str, ft.Text], color: str) -> ft.Container:
@@ -881,17 +885,18 @@ class BacktestView(ft.Container):
     def did_mount(self):
         super().did_mount()
         print("[BacktestView] did_mount: initializing view and rendering candles...")
-        if self.page:
+        target_page = self.page or self._page_ref
+        if target_page:
             try:
-                orig_resized = getattr(self.page, "on_resized", None)
+                orig_resize = getattr(target_page, "on_resize", None)
                 def _handle_page_resize(e):
-                    if callable(orig_resized):
+                    if callable(orig_resize):
                         try:
-                            orig_resized(e)
+                            orig_resize(e)
                         except Exception:
                             pass
                     self.draw_candles()
-                self.page.on_resized = _handle_page_resize
+                target_page.on_resize = _handle_page_resize
             except Exception:
                 pass
         self.draw_candles()
@@ -920,13 +925,32 @@ class BacktestView(ft.Container):
         """
         Отрисовывает настоящие японские свечи (Candlestick Canvas)
         с телами, фитилями, шкалой цен справа, пунктирной сеткой
-        и линией открытой позиции в стиле TradingView.
+        и линией открытой позиции в стиле TradingView на всю доступную ширину.
         """
+        # Геометрия графика (адаптивная ширина под экран)
+        target_page = self.page or self._page_ref
+        page_w = None
+        if target_page:
+            if hasattr(target_page, "width") and target_page.width:
+                page_w = int(target_page.width)
+            elif hasattr(target_page, "window") and target_page.window and getattr(target_page.window, "width", None):
+                page_w = int(target_page.window.width)
+
+        if page_w:
+            win_w = max(page_w - 180, 800)
+        else:
+            win_w = 1100
+
+        canvas_w = win_w
+        canvas_h = 420
+        self.chart_canvas.width = canvas_w
+        self.chart_canvas.height = canvas_h
+
         if not candles:
             self.chart_canvas.shapes = [
                 cv.Text(
-                    x=320,
-                    y=160,
+                    x=max((canvas_w / 2) - 130, 20),
+                    y=180,
                     text="Нет данных для отображения свечей",
                     style=ft.TextStyle(size=14, color="#64748B", font_family=FONT_MONO),
                 )
@@ -937,20 +961,6 @@ class BacktestView(ft.Container):
         window_size = 60
         window = candles[-window_size:] if len(candles) > window_size else candles
         num_bars = len(window)
-
-        # Геометрия графика (адаптивная ширина под экран)
-        win_w = 980
-        if self.page and hasattr(self.page, "width") and self.page.width:
-            win_w = max(int(self.page.width) - 260, 750)
-        elif self.page and self.page.window and self.page.window.width:
-            win_w = max(int(self.page.window.width) - 260, 750)
-        elif self._page_ref and hasattr(self._page_ref, "width") and self._page_ref.width:
-            win_w = max(int(self._page_ref.width) - 260, 750)
-        elif self._page_ref and hasattr(self._page_ref, "window") and self._page_ref.window and self._page_ref.window.width:
-            win_w = max(int(self._page_ref.window.width) - 260, 750)
-
-        canvas_w = win_w
-        canvas_h = 420
         right_scale_w = 80
         top_pad = 12
         bottom_pad = 20
