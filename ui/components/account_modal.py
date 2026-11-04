@@ -157,15 +157,15 @@ class AccountModal(ft.AlertDialog):
         )
 
         self.account_num_field = ft.TextField(
-            label="Номер счета / Депозит",
-            hint_text="Например: BIN-1029 или $50,000",
+            label="Номер счета",
+            hint_text="Например: BIN-1029",
             bgcolor=SURFACE_1,
             border_color=BORDER_SUBTLE,
             focused_border_color=ACCENT_PRIMARY,
             color=TEXT_PRIMARY,
             border_radius=RADIUS_MD,
             text_size=13,
-            width=200,
+            width=180,
         )
 
         self.add_btn = ft.ElevatedButton(
@@ -190,7 +190,7 @@ class AccountModal(ft.AlertDialog):
                     ft.Text("ПОДКЛЮЧЕННЫЕ СЧЕТА", size=11, weight=ft.FontWeight.BOLD, color=TEXT_MUTED),
                     ft.Container(
                         content=self.accounts_list_view,
-                        height=200,
+                        height=160,
                         bgcolor=BG_APP,
                         border=ft.border.all(1, BORDER_SUBTLE),
                         border_radius=10,
@@ -212,15 +212,18 @@ class AccountModal(ft.AlertDialog):
                     ),
                 ],
                 spacing=12,
+                scroll=ft.ScrollMode.ADAPTIVE,
                 tight=True,
             ),
             width=680,
-            padding=10,
+            height=490,
+            padding=ft.padding.symmetric(horizontal=10, vertical=4),
         )
 
         super().__init__(
             title=self.title_text,
             content=content_box,
+            content_padding=ft.padding.symmetric(horizontal=24, vertical=16),
             actions=[
                 ft.OutlinedButton(
                     content=ft.Row(
@@ -242,6 +245,7 @@ class AccountModal(ft.AlertDialog):
                     on_click=self._close,
                 ),
             ],
+            actions_padding=ft.padding.only(left=24, right=24, bottom=16, top=8),
             actions_alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             modal=True,
             bgcolor=SURFACE_OVERLAY,

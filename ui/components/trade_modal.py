@@ -268,6 +268,7 @@ class TradeModal(ft.AlertDialog):
                 spacing=8,
             ),
             content=self._build_content(),
+            content_padding=ft.padding.symmetric(horizontal=24, vertical=14),
             actions=[
                 ft.TextButton(
                     content=ft.Text("Отмена", color=TEXT_SECONDARY),
@@ -295,6 +296,7 @@ class TradeModal(ft.AlertDialog):
                     border_radius=10,
                 ),
             ],
+            actions_padding=ft.padding.only(left=24, right=24, bottom=16, top=8),
             actions_alignment=ft.MainAxisAlignment.END,
             bgcolor=SURFACE_OVERLAY,
             shape=ft.RoundedRectangleBorder(radius=16),
@@ -427,9 +429,11 @@ class TradeModal(ft.AlertDialog):
                     self.error_text,
                 ],
                 spacing=10,
+                scroll=ft.ScrollMode.ADAPTIVE,
                 tight=True,
             ),
             width=620,
+            height=520,
             padding=ft.padding.only(top=6),
         )
 

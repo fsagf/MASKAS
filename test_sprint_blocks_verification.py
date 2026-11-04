@@ -194,3 +194,32 @@ def test_subdomain_security_regex():
         assert re.fullmatch(pattern, v) is not None
     for inv in invalid:
         assert re.fullmatch(pattern, inv) is None
+
+
+def test_ui_modal_and_chart_fixes():
+    import flet as ft
+    from ui.components.trade_modal import TradeModal
+    from ui.components.account_modal import AccountModal
+    from ui.views.dashboard import DashboardView
+
+    # 1. Verify TradeModal scrolling and actions
+    tm = TradeModal(db_manager=None, on_trade_saved=lambda: None)
+    assert tm.content.height == 520
+    assert tm.content.content.scroll == ft.ScrollMode.ADAPTIVE
+    assert len(tm.actions) == 2
+
+    # 2. Verify AccountModal label and layout
+    am = AccountModal(db_manager=None, on_account_updated=lambda: None)
+    assert am.account_num_field.label == "Номер счета"
+    assert am.content.height == 490
+    assert am.content.content.scroll == ft.ScrollMode.ADAPTIVE
+
+    # 3. Verify Monte Carlo cone card builds without LineChart tooltip error
+    from unittest.mock import MagicMock
+    mock_db = MagicMock()
+    mock_db.get_trades.return_value = []
+    mock_db.get_accounts.return_value = []
+    dv = DashboardView(db_manager=mock_db, on_open_plotly=lambda: None)
+    card = dv._build_monte_carlo_cone_card(trades=[], initial_balance=10000.0)
+    assert card is not None
+

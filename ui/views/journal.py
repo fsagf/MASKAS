@@ -578,14 +578,6 @@ class JournalView(ft.Container):
         shapes.append(
             cv.Circle(ent_xc, ent_yc, 3.5, paint=ft.Paint(color=ent_col, style=ft.PaintingStyle.FILL))
         )
-        shapes.append(
-            cv.Text(
-                x=max(ent_xc - 22, left_pad),
-                y=min(ent_yc + 4, canvas_h - 14),
-                text=f"BUY @ ${trade.entry_price:,.0f}" if is_long else f"SELL @ ${trade.entry_price:,.0f}",
-                style=ft.TextStyle(size=8, weight=ft.FontWeight.BOLD, color=ent_col, font_family=FONT_MONO),
-            )
-        )
 
         # Маркер выхода (EXIT)
         ext_xc = left_pad + closest_exit_idx * candle_step + (candle_step / 2)
@@ -594,12 +586,43 @@ class JournalView(ft.Container):
         shapes.append(
             cv.Circle(ext_xc, ext_yc, 3.5, paint=ft.Paint(color=ext_col, style=ft.PaintingStyle.FILL))
         )
+
         r_str = f"({trade.r_multiple:+.1f}R)" if getattr(trade, 'r_multiple', None) else ""
+        entry_lbl = f"BUY @ ${trade.entry_price:,.0f}" if is_long else f"SELL @ ${trade.entry_price:,.0f}"
+        exit_lbl = f"EXIT @ ${trade.exit_price:,.0f} {r_str}"
+
+        # Предотвращение наложения подписей входа и выхода (Collision Avoidance)
+        is_x_close = abs(ext_xc - ent_xc) < 70
+        is_y_close = abs(ext_yc - ent_yc) < 22
+
+        if is_x_close:
+            ent_x = max(ent_xc - 62, left_pad)
+            ext_x = min(ext_xc + 6, canvas_w - 90)
+            if is_y_close:
+                ent_y = min(ent_yc + 6, canvas_h - 12)
+                ext_y = max(ext_yc - 14, 4)
+            else:
+                ent_y = min(ent_yc + 4, canvas_h - 12) if is_long else max(ent_yc - 14, 4)
+                ext_y = max(ext_yc - 14, 4) if is_long else min(ext_yc + 4, canvas_h - 12)
+        else:
+            ent_x = max(ent_xc - 24, left_pad)
+            ext_x = max(ext_xc - 28, left_pad)
+            ent_y = min(ent_yc + 5, canvas_h - 12) if is_long else max(ent_yc - 14, 4)
+            ext_y = max(ext_yc - 14, 4) if is_long else min(ext_yc + 5, canvas_h - 12)
+
         shapes.append(
             cv.Text(
-                x=max(ext_xc - 28, left_pad),
-                y=max(ext_yc - 12, 2),
-                text=f"EXIT @ ${trade.exit_price:,.0f} {r_str}",
+                x=ent_x,
+                y=ent_y,
+                text=entry_lbl,
+                style=ft.TextStyle(size=8, weight=ft.FontWeight.BOLD, color=ent_col, font_family=FONT_MONO),
+            )
+        )
+        shapes.append(
+            cv.Text(
+                x=ext_x,
+                y=ext_y,
+                text=exit_lbl,
                 style=ft.TextStyle(size=8, weight=ft.FontWeight.BOLD, color=ext_col, font_family=FONT_MONO),
             )
         )
@@ -824,6 +847,24 @@ class JournalView(ft.Container):
             min_y, max_y, span = -2.0, 4.0, 6.0
             chart_data_pts = [ft.LineChartDataPoint(0, 0), ft.LineChartDataPoint(1, 1)]
 
+        # Явные аккуратные метки оси Y для исключения наложений
+        axis_y_vals = [round(min_y, 1), 0.0, round(max_y, 1)]
+        uniq_y = sorted(list({round(v, 1) for v in axis_y_vals}))
+        if len(uniq_y) < 2:
+            uniq_y = [-1.0, 0.0, 1.0]
+
+        underwater_axis_labels = [
+            ft.ChartAxisLabel(
+                value=y_val,
+                label=ft.Container(
+                    content=ft.Text(f"{y_val:+.1f}%", size=9, font_family=FONT_MONO, color=TEXT_MUTED),
+                    alignment=ft.alignment.center_right,
+                    padding=ft.padding.only(right=4),
+                ),
+            )
+            for y_val in uniq_y
+        ]
+
         underwater_chart = ft.LineChart(
             data_series=[
                 ft.LineChartData(
@@ -839,11 +880,12 @@ class JournalView(ft.Container):
                     ),
                 )
             ],
-            
-            horizontal_grid_lines=ft.ChartGridLines(interval=span / 3, color=BORDER_SUBTLE, width=1, dash_pattern=[3, 3]),
+            horizontal_grid_lines=ft.ChartGridLines(interval=max(span / 3, 0.5), color=BORDER_SUBTLE, width=1, dash_pattern=[3, 3]),
             vertical_grid_lines=ft.ChartGridLines(width=0),
-            left_axis=ft.ChartAxis(labels_size=34, labels_interval=span / 2),
+            left_axis=ft.ChartAxis(labels=underwater_axis_labels, labels_size=46),
             bottom_axis=ft.ChartAxis(visible=False),
+            top_axis=ft.ChartAxis(visible=False),
+            right_axis=ft.ChartAxis(visible=False),
             min_y=min_y - 0.4,
             max_y=max_y + 0.4,
             interactive=True,

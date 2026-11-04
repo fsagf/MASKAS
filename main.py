@@ -138,8 +138,18 @@ if __name__ == "__main__":
             assets_dir="assets",
         )
     else:
-        ft.app(
-            target=main,
-            view=ft.AppView.FLET_APP,
-            assets_dir="assets",
-        )
+        try:
+            ft.app(
+                target=main,
+                view=ft.AppView.FLET_APP,
+                assets_dir="assets",
+            )
+        except (ImportError, Exception) as ex:
+            logger.warning(f"[Trading Journal] Нативное окно недоступно ({ex}), запуск в браузере: http://localhost:{port}")
+            ft.app(
+                target=main,
+                view=ft.AppView.WEB_BROWSER,
+                host="0.0.0.0",
+                port=port,
+                assets_dir="assets",
+            )

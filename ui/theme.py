@@ -309,6 +309,14 @@ def patch_flet_chart_tooltips() -> None:
                 self._set_attr("tooltip", str(orig_tooltip))
 
         LineChartDataPoint._before_build_command = patched_before
+
+        import flet as ft
+        orig_chart_init = ft.LineChart.__init__
+        def patched_chart_init(self, *args, **kwargs):
+            if "tooltip_border_side" in kwargs:
+                kwargs["tooltip_tooltip_border_side"] = kwargs.pop("tooltip_border_side")
+            orig_chart_init(self, *args, **kwargs)
+        ft.LineChart.__init__ = patched_chart_init
     except Exception as ex:
         print(f"[Theme] Warning: Could not patch LineChartDataPoint tooltip: {ex}")
 
