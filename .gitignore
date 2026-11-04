@@ -5,8 +5,12 @@ __pycache__/
 *.sqlite3
 data/*.db
 data/trades.db
+data/.secret.key
+data/*.csv
 data/equity_chart.html
 data/trades_export.csv
+assets/*.html
+*.png
 *.log
 .system_generated/
 tmp_yaml/

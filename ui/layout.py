@@ -114,6 +114,7 @@ class AppLayout(ft.Row):
             padding=ft.padding.only(left=20, right=24, top=14, bottom=16),
             bgcolor=BG_APP,
         )
+        self.content_area = self.content_container
 
         # 6. Верхняя панель (Header Bar)
         top_header_bar = self._build_top_header()
@@ -536,8 +537,10 @@ class AppLayout(ft.Row):
             else:
                 target_view.refresh()
 
+        self.content_area.content = target_view
         self.content_container.content = target_view
-        self.page.update()
+        if self.page:
+            self.page.update()
 
     def open_add_trade_modal(self) -> None:
         """Открытие модального окна добавления новой сделки."""

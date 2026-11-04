@@ -5,9 +5,12 @@
 генерация интерактивного Plotly дашборда и поддержка веб-режима (--web на порту 8550).
 """
 
+import logging
 from pathlib import Path
 import sys
 import webbrowser
+
+logger = logging.getLogger("main")
 
 import flet as ft
 

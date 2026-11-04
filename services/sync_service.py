@@ -14,38 +14,16 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("sync_service")
 
-# Инициализация шифрования Fernet с детерминированным ключом приложения
 try:
-    from cryptography.fernet import Fernet
-    _SALT = b"TradingJournalProSecretSalt2026"
-    _KEY = base64.urlsafe_b64encode(hashlib.sha256(_SALT).digest())
-    _CIPHER = Fernet(_KEY)
-except Exception:
-    _CIPHER = None
-
-
-def encrypt_secret(plain_text: Optional[str]) -> Optional[str]:
-    """Шифрует API ключ/секрет."""
-    if not plain_text:
+    from database import decrypt_db_secret, encrypt_db_secret
+    decrypt_secret = decrypt_db_secret
+    encrypt_secret = encrypt_db_secret
+except ImportError:
+    def encrypt_secret(plain_text: Optional[str]) -> Optional[str]:
         return plain_text
-    if _CIPHER:
-        try:
-            return _CIPHER.encrypt(plain_text.encode("utf-8")).decode("utf-8")
-        except Exception:
-            return plain_text
-    return plain_text
 
-
-def decrypt_secret(cipher_text: Optional[str]) -> Optional[str]:
-    """Расшифровывает API ключ/секрет."""
-    if not cipher_text:
+    def decrypt_secret(cipher_text: Optional[str]) -> Optional[str]:
         return cipher_text
-    if _CIPHER:
-        try:
-            return _CIPHER.decrypt(cipher_text.encode("utf-8")).decode("utf-8")
-        except Exception:
-            return cipher_text
-    return cipher_text
 
 
 # Опциональный импорт ccxt

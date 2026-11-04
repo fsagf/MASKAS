@@ -11,6 +11,7 @@ run_share.py
 import argparse
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -72,16 +73,13 @@ def print_banner(public_url: str, local_port: int, mode_name: str, tunnel_pwd: O
 
 
 def run_flet_backend(port: int) -> subprocess.Popen:
-    """Запускает Flet веб-сервер в фоновом субпроцессе."""
+    """Запускает Flet веб-сервер в фоновом субпроцессе без блокировки пайпов."""
     print(f"[1/2] ⏳ Запуск Flet-сервера на порту {port} (0.0.0.0)...")
     cmd = [sys.executable, "-u", "main.py", "--web"]
     proc = subprocess.Popen(
         cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
     return proc
 
@@ -89,7 +87,13 @@ def run_flet_backend(port: int) -> subprocess.Popen:
 def run_localtunnel(port: int, subdomain: Optional[str] = None) -> None:
     """Создает публичный туннель через localtunnel (npx)."""
     print("[2/2] 🌐 Инициализация публичного Web-туннеля (localtunnel)...")
-    cmd = ["npx", "-y", "localtunnel", "--port", str(port)]
+    if subdomain:
+        if not re.fullmatch(r"^[a-zA-Z0-9-]+$", subdomain):
+            print("❌ Ошибка безопасности: Недопустимый поддомен (разрешены только a-z, 0-9 и дефис).")
+            return
+
+    npx_bin = shutil.which("npx") or "npx"
+    cmd = [npx_bin, "-y", "localtunnel", "--port", str(port)]
     if subdomain:
         cmd.extend(["--subdomain", subdomain])
 
@@ -100,7 +104,7 @@ def run_localtunnel(port: int, subdomain: Optional[str] = None) -> None:
         text=True,
         encoding="utf-8",
         errors="replace",
-        shell=True,
+        shell=False,
     )
 
     url_regex = re.compile(r"https?://[a-zA-Z0-9\.\-]+")

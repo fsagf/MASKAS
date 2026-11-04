@@ -112,9 +112,9 @@ class BacktestView(ft.Container):
             ],
             value=self.selected_timeframe,
             width=110,
-            bgcolor=SURFACE_2,
-            border_color=BORDER_SUBTLE,
-            focused_border_color=ACCENT_PRIMARY,
+            bgcolor="#181B26",
+            border_color="#2D3243",
+            focused_border_color="#7C5CFF",
             text_size=12,
             border_radius=8,
             dense=True,
@@ -138,7 +138,7 @@ class BacktestView(ft.Container):
 
         # Свечной график на основе flet.canvas
         self.chart_canvas = cv.Canvas(
-            height=320,
+            height=420,
             expand=True,
         )
 
@@ -153,9 +153,9 @@ class BacktestView(ft.Container):
                 ],
                 spacing=0,
             ),
-            height=365,
+            height=465,
             expand=True,
-            bgcolor="#090A0F",
+            bgcolor="#0E1017",
             border=ft.border.all(1, BORDER_SUBTLE),
             border_radius=RADIUS_MD,
             padding=0,
@@ -168,8 +168,9 @@ class BacktestView(ft.Container):
         self.play_btn = ft.ElevatedButton(
             text="Play",
             icon=ft.Icons.PLAY_ARROW_ROUNDED,
-            bgcolor=ACCENT_PRIMARY,
-            color=TEXT_PRIMARY,
+            bgcolor="#7C5CFF",
+            color="#FFFFFF",
+            icon_color="#FFFFFF",
             style=ft.ButtonStyle(
                 shape=ft.RoundedRectangleBorder(radius=8),
                 padding=ft.padding.symmetric(horizontal=12, vertical=8),
@@ -180,14 +181,16 @@ class BacktestView(ft.Container):
         # Торговые операции
         cfg = SYMBOLS_CONFIG[self.selected_symbol]
         self.volume_field = ft.TextField(
-            label="Объем (лот)",
+            label="Объем",
             value=str(cfg["default_lot"]),
-            width=110,
+            width=90,
+            height=40,
             bgcolor=SURFACE_2,
             border_color=BORDER_SUBTLE,
             focused_border_color=ACCENT_PRIMARY,
             color=TEXT_PRIMARY,
-            text_size=12,
+            text_size=13,
+            content_padding=ft.padding.symmetric(horizontal=10, vertical=8),
             border_radius=8,
             dense=True,
             text_style=ft.TextStyle(font_family=FONT_MONO),
@@ -197,11 +200,13 @@ class BacktestView(ft.Container):
             label="SL (%)",
             value="1.5",
             width=90,
+            height=40,
             bgcolor=SURFACE_2,
             border_color=BORDER_SUBTLE,
             focused_border_color=LOSS,
             color=TEXT_PRIMARY,
-            text_size=12,
+            text_size=13,
+            content_padding=ft.padding.symmetric(horizontal=10, vertical=8),
             border_radius=8,
             dense=True,
             text_style=ft.TextStyle(font_family=FONT_MONO),
@@ -211,11 +216,13 @@ class BacktestView(ft.Container):
             label="TP (%)",
             value="3.0",
             width=90,
+            height=40,
             bgcolor=SURFACE_2,
             border_color=BORDER_SUBTLE,
             focused_border_color=PROFIT,
             color=TEXT_PRIMARY,
-            text_size=12,
+            text_size=13,
+            content_padding=ft.padding.symmetric(horizontal=10, vertical=8),
             border_radius=8,
             dense=True,
             text_style=ft.TextStyle(font_family=FONT_MONO),
@@ -230,6 +237,7 @@ class BacktestView(ft.Container):
         )
 
         # Журнал сделок бэктеста
+        self.session_trades_header_count = ft.Text(f"Всего закрыто: {len(self.session_trades)}", size=11, color=TEXT_MUTED, font_family=FONT_MONO)
         self.trades_listview = ft.ListView(expand=True, spacing=6, height=180)
 
     def _build_layout(self) -> ft.Control:
@@ -350,9 +358,11 @@ class BacktestView(ft.Container):
                         ft.ElevatedButton(
                             text="BUY Market",
                             icon=ft.Icons.ARROW_UPWARD_ROUNDED,
-                            color=TEXT_PRIMARY,
+                            color="#090A0F",
+                            icon_color="#090A0F",
                             bgcolor=PROFIT,
                             style=ft.ButtonStyle(
+                                text_style=ft.TextStyle(weight=ft.FontWeight.W_700),
                                 shape=ft.RoundedRectangleBorder(radius=8),
                                 padding=ft.padding.symmetric(horizontal=12, vertical=8),
                             ),
@@ -361,9 +371,11 @@ class BacktestView(ft.Container):
                         ft.ElevatedButton(
                             text="SELL Market",
                             icon=ft.Icons.ARROW_DOWNWARD_ROUNDED,
-                            color=TEXT_PRIMARY,
+                            color="#090A0F",
+                            icon_color="#090A0F",
                             bgcolor=LOSS,
                             style=ft.ButtonStyle(
+                                text_style=ft.TextStyle(weight=ft.FontWeight.W_700),
                                 shape=ft.RoundedRectangleBorder(radius=8),
                                 padding=ft.padding.symmetric(horizontal=12, vertical=8),
                             ),
@@ -372,8 +384,10 @@ class BacktestView(ft.Container):
                         ft.ElevatedButton(
                             text="Закрыть",
                             icon=ft.Icons.CLOSE_ROUNDED,
-                            color=TEXT_PRIMARY,
-                            bgcolor=ACCENT_PRIMARY,
+                            color="#FFFFFF",
+                            icon_color="#FFFFFF",
+                            bgcolor="#7C5CFF",
+                            tooltip="Закрыть открытую позицию по текущей цене",
                             style=ft.ButtonStyle(
                                 shape=ft.RoundedRectangleBorder(radius=8),
                                 padding=ft.padding.symmetric(horizontal=12, vertical=8),
@@ -432,7 +446,7 @@ class BacktestView(ft.Container):
                                 ],
                                 spacing=6,
                             ),
-                            ft.Text(f"Всего закрыто: {len(self.session_trades)}", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                            self.session_trades_header_count,
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
@@ -604,6 +618,8 @@ class BacktestView(ft.Container):
         self.play_btn.text = "Pause"
         self.play_btn.icon = ft.Icons.PAUSE_ROUNDED
         self.play_btn.bgcolor = WARNING_TILT
+        self.play_btn.color = "#090A0F"
+        self.play_btn.icon_color = "#090A0F"
         print(f"[BacktestView] Play started at candle {self.replay_index + 1}")
         if self.play_btn.page:
             self.play_btn.update()
@@ -617,7 +633,9 @@ class BacktestView(ft.Container):
         self.is_playing = False
         self.play_btn.text = "Play"
         self.play_btn.icon = ft.Icons.PLAY_ARROW_ROUNDED
-        self.play_btn.bgcolor = ACCENT_PRIMARY
+        self.play_btn.bgcolor = "#7C5CFF"
+        self.play_btn.color = "#FFFFFF"
+        self.play_btn.icon_color = "#FFFFFF"
         print(f"[BacktestView] Play stopped at candle {self.replay_index + 1}")
         if self._play_task:
             self._play_task.cancel()
@@ -812,13 +830,16 @@ class BacktestView(ft.Container):
             wins = len([t for t in self.session_trades if t["net_pnl"] > 0])
             total_cnt = len(self.session_trades)
             wr = round(wins / total_cnt * 100.0, 1) if total_cnt > 0 else 0.0
-            self.winrate_text.value = f"{wr:.1f}%"
-            self.winrate_subtext.value = f"{wins} из {total_cnt} прибыльных"
+            self.winrate_text.value = f"{wr:.1f}% ({wins} из {total_cnt})"
+            self.winrate_subtext.value = "Прибыльных сделок"
             self.winrate_text.color = PROFIT if wr >= 50 else LOSS
         else:
-            self.winrate_text.value = "0.0%"
-            self.winrate_subtext.value = "0 из 0 прибыльных"
+            self.winrate_text.value = "0.0% (0 из 0)"
+            self.winrate_subtext.value = "Прибыльных сделок"
             self.winrate_text.color = TEXT_MUTED
+
+        if hasattr(self, "session_trades_header_count") and self.session_trades_header_count:
+            self.session_trades_header_count.value = f"Всего закрыто: {len(self.session_trades)}"
 
         # Баннер позиции
         if self.active_position:
@@ -860,19 +881,40 @@ class BacktestView(ft.Container):
     def did_mount(self):
         super().did_mount()
         print("[BacktestView] did_mount: initializing view and rendering candles...")
-        self._update_all_views()
+        if self.page:
+            try:
+                orig_resized = getattr(self.page, "on_resized", None)
+                def _handle_page_resize(e):
+                    if callable(orig_resized):
+                        try:
+                            orig_resized(e)
+                        except Exception:
+                            pass
+                    self.draw_candles()
+                self.page.on_resized = _handle_page_resize
+            except Exception:
+                pass
+        self.draw_candles()
 
-    def refresh(self) -> None:
-        """Публичный метод обновления бэктеста при смене экранов."""
-        print("[BacktestView] Refresh called from layout/router.")
-        if not self.all_candles:
-            self._load_market_candles()
+    def draw_candles(self) -> None:
+        """Перерисовка свечного графика и представлений."""
         self._update_all_views()
         if self.page:
             try:
                 self.page.update()
             except Exception:
                 pass
+
+    def update_canvas(self) -> None:
+        """Алиас для перерисовки канваса."""
+        self.draw_candles()
+
+    def refresh(self) -> None:
+        """Публичный метод обновления бэктеста при смене экранов."""
+        print("[BacktestView] Refresh called from layout/router.")
+        if not self.all_candles:
+            self._load_market_candles()
+        self.draw_candles()
 
     def _render_chart(self, candles: List[Dict[str, Any]]) -> None:
         """
@@ -908,7 +950,7 @@ class BacktestView(ft.Container):
             win_w = max(int(self._page_ref.window.width) - 260, 750)
 
         canvas_w = win_w
-        canvas_h = 320
+        canvas_h = 420
         right_scale_w = 80
         top_pad = 12
         bottom_pad = 20
@@ -930,8 +972,11 @@ class BacktestView(ft.Container):
         p_span = max_p - min_p
 
         def price_to_y(price: float) -> float:
+            if p_span <= 0:
+                return top_pad + (plot_h / 2.0)
             ratio = (price - min_p) / p_span
-            return top_pad + plot_h - (ratio * plot_h)
+            raw_y = top_pad + plot_h - (ratio * plot_h)
+            return max(top_pad, min(top_pad + plot_h, raw_y))
 
         slot_w = plot_w / max(num_bars, 1)
         body_w = max(slot_w * 0.72, 3.0)
@@ -1253,7 +1298,7 @@ class BacktestView(ft.Container):
                         ft.Text(f"Выход: ${t['exit_price']:,.2f}", size=11, color=TEXT_SECONDARY, font_family=FONT_MONO),
                         ft.Text(f"Объем: {t['volume']} ({t['steps']} св.)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
                         ft.Text(f"Gross: {gross_sign}${gross_val:,.2f}", size=11, color=TEXT_SECONDARY, font_family=FONT_MONO),
-                        ft.Text(f"Fee: ${t.get('commission', 0.0):.2f}", size=11, color=WARNING_TILT, font_family=FONT_MONO),
+                        ft.Text(f"Комиссия: -${t.get('commission', 0.0):.2f}", size=11, color=WARNING_TILT, font_family=FONT_MONO),
                         ft.Text(f"Net: {sign}${t['net_pnl']:,.2f}", size=12, weight=ft.FontWeight.BOLD, color=pnl_col, font_family=FONT_MONO),
                     ],
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,

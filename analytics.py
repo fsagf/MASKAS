@@ -203,8 +203,11 @@ class AnalyticsService:
         if not recent_trades:
             return False, None
 
-        # Ищем последнюю закрытую сделку
-        last_trade = recent_trades[0]
+        # Ищем последнюю закрытую сделку по таймстампу
+        sorted_recent = sorted([t for t in recent_trades if t.closed_at], key=lambda x: x.closed_at, reverse=True)
+        if not sorted_recent:
+            sorted_recent = recent_trades
+        last_trade = sorted_recent[0]
 
         # 2. Детектор Revenge Trading (< 10 минут после лосса)
         if last_trade.net_pnl < 0 and last_trade.closed_at:
@@ -214,10 +217,10 @@ class AnalyticsService:
                 return True, f"Revenge Trade (открыта через {mins} мин после закрытия убытка #{last_trade.id})"
 
         # 3. Детектор Over-risking / Мартингейл (риск/объем >= 2x от средней нормы после убытка)
-        past_losses = [t for t in recent_trades[:5] if t.net_pnl < 0]
-        if past_losses and len(recent_trades) >= 2:
-            avg_risk = float(np.mean([t.risk_amount for t in recent_trades[:10] if t.risk_amount > 0] or [1.0]))
-            avg_vol = float(np.mean([t.volume for t in recent_trades[:10]] or [1.0]))
+        past_losses = [t for t in sorted_recent[:5] if t.net_pnl < 0]
+        if past_losses and len(sorted_recent) >= 2:
+            avg_risk = float(np.mean([t.risk_amount for t in sorted_recent[:10] if t.risk_amount > 0] or [100.0]))
+            avg_vol = float(np.mean([t.volume for t in sorted_recent[:10] if t.volume > 0] or [1.0]))
 
             if cand_risk > 0 and cand_risk >= avg_risk * 2.0:
                 return True, f"Превышение риска x{cand_risk / avg_risk:.1f} сразу после убытков"
@@ -302,18 +305,19 @@ class AnalyticsService:
         total_broker_costs = round(total_comm + total_swap, 2)
         fee_drag = round((total_broker_costs / gross_profit * 100), 1) if gross_profit > 0 else 0.0
 
-        # Скользящие спарклайны (последние 10-15 сделок)
-        sorted_asc = sorted(target_trades, key=lambda x: x.closed_at)
+        # Скользящие спарклайны (последние 12 точек)
+        sorted_asc = sorted([t for t in target_trades if t.closed_at], key=lambda x: x.closed_at) or target_trades
         winrate_spark = []
         pf_spark = []
 
-        step_len = max(len(sorted_asc), 2)
-        for i in range(1, step_len + 1):
+        step_len = len(sorted_asc)
+        start_idx = max(1, step_len - 11)
+        for i in range(start_idx, step_len + 1):
             sub = sorted_asc[:i]
             sub_p = [t.net_pnl for t in sub]
             sub_w = [p for p in sub_p if p > 0]
             sub_l = [p for p in sub_p if p < 0]
-            w_rate = round(len(sub_w) / len(sub) * 100, 1)
+            w_rate = round(len(sub_w) / len(sub) * 100, 1) if sub else 0.0
             winrate_spark.append(w_rate)
 
             g_w = sum(sub_w)
@@ -362,6 +366,7 @@ class AnalyticsService:
         trades: List[Trade],
         n_simulations: int = 10000,
         n_steps: int = 20,
+        initial_balance: float = 10000.0,
     ) -> Dict[str, Any]:
         """
         Векторная квантовая симуляция Монте-Карло (10 000 итераций bootstrap).
@@ -370,7 +375,8 @@ class AnalyticsService:
         valid_trades = [t for t in trades if not t.is_tilt] or trades
         pnls = [t.net_pnl for t in valid_trades] if valid_trades else []
 
-        current_equity = float(sum([t.net_pnl for t in trades])) if trades else 500.0
+        base_balance = initial_balance if initial_balance > 0 else 10000.0
+        current_equity = float(base_balance + sum([t.net_pnl for t in trades])) if trades else base_balance
 
         # Если сделок < 3, формируем синтетический массив с реальной волатильностью
         if len(pnls) < 3:
@@ -436,7 +442,6 @@ class AnalyticsService:
         df = df.sort_values(by=["closed_at", "id"]).reset_index(drop=True)
         return df
 
-    @classmethod
     @classmethod
     def generate_interactive_plotly_dashboard(
         cls,
@@ -595,8 +600,8 @@ class AnalyticsService:
 
         fig_equity.update_layout(
             template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="#090A0F",
+            plot_bgcolor="#12151E",
             font=dict(family="Inter, -apple-system, sans-serif", color="#94A3B8", size=11),
             margin=dict(l=55, r=20, t=15, b=25),
             height=480,
@@ -667,8 +672,8 @@ class AnalyticsService:
 
         fig_strategies.update_layout(
             template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="#090A0F",
+            plot_bgcolor="#12151E",
             font=dict(family="Inter, -apple-system, sans-serif", color="#94A3B8", size=11),
             margin=dict(l=140, r=30, t=15, b=25),
             height=320,
@@ -729,8 +734,8 @@ class AnalyticsService:
 
         fig_hist.update_layout(
             template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            paper_bgcolor="#090A0F",
+            plot_bgcolor="#12151E",
             font=dict(family="Inter, -apple-system, sans-serif", color="#94A3B8", size=11),
             margin=dict(l=40, r=20, t=15, b=25),
             height=320,
@@ -1332,52 +1337,98 @@ class AnalyticsService:
         """
         Импортирует сделки из CSV файла с автоопределением заголовков
         (поддерживает выгрузки Trading Journal, Binance, Bybit и MT5).
+        Использует единую пакетную транзакцию bulk_add_trades.
         """
         path = Path(filepath)
         if not path.exists():
             return 0
 
-        imported = 0
-        with open(path, mode="r", encoding="utf-8-sig") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                # Нормализация ключей заголовка
-                clean_row = {k.strip().lower(): v.strip() for k, v in row.items() if k}
+        try:
+            df = pd.read_csv(filepath, encoding="utf-8-sig")
+        except Exception:
+            try:
+                df = pd.read_csv(filepath, encoding="cp1251")
+            except Exception:
+                return 0
 
-                ticker = clean_row.get("ticker") or clean_row.get("symbol") or clean_row.get("instrument")
-                if not ticker:
-                    continue
+        if df.empty:
+            return 0
 
-                direction = clean_row.get("direction") or clean_row.get("side") or clean_row.get("type") or "LONG"
-                dir_upper = "SHORT" if "SHORT" in direction.upper() or "SELL" in direction.upper() else "LONG"
+        # Нормализация заголовков
+        df.columns = [str(c).strip().lower() for c in df.columns]
 
-                try:
-                    entry_p = float(clean_row.get("entry_price") or clean_row.get("price") or clean_row.get("open_price") or 0.0)
-                    exit_p = float(clean_row.get("exit_price") or clean_row.get("close_price") or entry_p)
-                    vol = float(clean_row.get("volume") or clean_row.get("qty") or clean_row.get("amount") or 1.0)
-                    comm = float(clean_row.get("commission") or clean_row.get("fee") or 0.0)
-                    stop = float(clean_row["stop_loss"]) if clean_row.get("stop_loss") else None
-                    take = float(clean_row["take_profit"]) if clean_row.get("take_profit") else None
-                    strategy = clean_row.get("strategy_tag") or clean_row.get("strategy") or "Импорт"
-                    notes = clean_row.get("notes") or clean_row.get("comment") or ""
-                except ValueError:
-                    continue
+        ticker_col = next((c for c in ["ticker", "symbol", "instrument"] if c in df.columns), None)
+        if not ticker_col:
+            return 0
 
-                db_manager.add_trade(
-                    ticker=ticker,
-                    direction=dir_upper,
-                    entry_price=entry_p,
-                    exit_price=exit_p,
-                    volume=vol,
-                    strategy_tag=strategy,
-                    stop_loss=stop,
-                    take_profit=take,
-                    commission=comm,
-                    notes=notes,
-                )
+        dir_col = next((c for c in ["direction", "side", "type"] if c in df.columns), None)
+        entry_col = next((c for c in ["entry_price", "price", "open_price"] if c in df.columns), None)
+        exit_col = next((c for c in ["exit_price", "close_price"] if c in df.columns), None)
+        vol_col = next((c for c in ["volume", "qty", "amount"] if c in df.columns), None)
+        comm_col = next((c for c in ["commission", "fee"] if c in df.columns), None)
+        sl_col = next((c for c in ["stop_loss", "sl"] if c in df.columns), None)
+        tp_col = next((c for c in ["take_profit", "tp"] if c in df.columns), None)
+        strat_col = next((c for c in ["strategy_tag", "strategy"] if c in df.columns), None)
+        notes_col = next((c for c in ["notes", "comment"] if c in df.columns), None)
+        open_time_col = next((c for c in ["opened_at", "open_time"] if c in df.columns), None)
+        close_time_col = next((c for c in ["closed_at", "close_time", "date"] if c in df.columns), None)
+
+        records_to_insert = []
+        for _, row in df.iterrows():
+            ticker = str(row[ticker_col]).strip() if pd.notna(row[ticker_col]) else ""
+            if not ticker or ticker.lower() == "nan":
+                continue
+
+            direction_val = str(row[dir_col]).upper() if dir_col and pd.notna(row[dir_col]) else "LONG"
+            direction = "SHORT" if ("SHORT" in direction_val or "SELL" in direction_val) else "LONG"
+
+            try:
+                entry_p = float(row[entry_col]) if entry_col and pd.notna(row[entry_col]) else 0.0
+                exit_p = float(row[exit_col]) if exit_col and pd.notna(row[exit_col]) else entry_p
+                vol = float(row[vol_col]) if vol_col and pd.notna(row[vol_col]) else 1.0
+                comm = float(row[comm_col]) if comm_col and pd.notna(row[comm_col]) else 0.0
+                stop = float(row[sl_col]) if sl_col and pd.notna(row[sl_col]) else None
+                take = float(row[tp_col]) if tp_col and pd.notna(row[tp_col]) else None
+                strat = str(row[strat_col]).strip() if strat_col and pd.notna(row[strat_col]) else "Импорт"
+                notes = str(row[notes_col]).strip() if notes_col and pd.notna(row[notes_col]) else ""
+
+                t_open = None
+                if open_time_col and pd.notna(row[open_time_col]):
+                    dt_parsed = pd.to_datetime(row[open_time_col], errors="coerce")
+                    if pd.notna(dt_parsed):
+                        t_open = dt_parsed.to_pydatetime()
+
+                t_close = None
+                if close_time_col and pd.notna(row[close_time_col]):
+                    dt_parsed = pd.to_datetime(row[close_time_col], errors="coerce")
+                    if pd.notna(dt_parsed):
+                        t_close = dt_parsed.to_pydatetime()
+
+                records_to_insert.append({
+                    "ticker": ticker,
+                    "direction": direction,
+                    "entry_price": entry_p,
+                    "exit_price": exit_p,
+                    "volume": vol,
+                    "strategy_tag": strat,
+                    "stop_loss": stop,
+                    "take_profit": take,
+                    "commission": comm,
+                    "notes": notes,
+                    "opened_at": t_open,
+                    "closed_at": t_close,
+                })
+            except Exception:
+                continue
+
+        if hasattr(db_manager, "bulk_add_trades"):
+            return db_manager.bulk_add_trades(records_to_insert)
+        else:
+            imported = 0
+            for rec in records_to_insert:
+                db_manager.add_trade(**rec)
                 imported += 1
-
-        return imported
+            return imported
 
 
 class WaveAICoachService:
@@ -1442,7 +1493,7 @@ class WaveAICoachService:
         df_valid_dates = df.dropna(subset=["closed_at"]).copy()
         if not df_valid_dates.empty:
             ru_days = ["понедельникам", "вторникам", "средам", "четвергам", "пятницам", "субботам", "воскресеньям"]
-            df_valid_dates["day_idx"] = df_valid_dates["closed_at"].dt.weekday
+            df_valid_dates["day_idx"] = df_valid_dates["closed_at"].dt.day_of_week
             df_valid_dates["is_late"] = df_valid_dates["closed_at"].dt.hour >= 18
             
             day_pnl = df_valid_dates.groupby("day_idx")["net_pnl"].sum()
@@ -1508,9 +1559,9 @@ class WaveAICoachService:
             })
 
         # 5. Анализ издержек (Fee Drag)
-        tot_costs = float(df["commission"].sum() + df["swap_fee"].sum())
-        gross_prof = float(df[df["gross_pnl"] > 0]["gross_pnl"].sum())
-        fee_drag = (tot_costs / gross_prof * 100) if gross_prof > 0 else 0.0
+        metrics = AnalyticsService.calculate_metrics(trades)
+        tot_costs = float(df["commission"].sum() + (df["swap_fee"].sum() if "swap_fee" in df.columns else 0.0))
+        fee_drag = metrics.fee_drag_pct
 
         insights.append({
             "title": "Нагрузка издержек (Fee Drag)",

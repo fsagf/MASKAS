@@ -18,23 +18,32 @@ trading_journal/
 │
 ├── data/                       # Папка базы данных и экспорта графиков
 │   ├── trades.db               # SQLite база данных (создается автоматически)
-│   └── equity_chart.html       # Интерактивный график Plotly
+│   └── .secret.key             # Ключ шифрования API-ключей Fernet (256-bit AES)
 │
-├── database.py                 # Модель Trade (SQLAlchemy) и DatabaseManager (CRUD)
-├── analytics.py                # Расчет Winrate, Profit Factor, Net PnL и генерация Equity Curve
+├── database.py                 # Модели Trade, TradingAccount, TradeExecution и DatabaseManager (CRUD, bulk_add)
+├── analytics.py                # Квантовая аналитика, Monte Carlo, спарклайны, Wave AI Coach и экспорт Plotly
+├── run_share.py                # Публичный Web-туннель (localtunnel, ngrok, Flet Share)
 │
-├── ui/                         # Модульный пакет интерфейса
+├── services/                   # Внешние институциональные сервисы
+│   ├── sync_service.py         # Прямая автосинхронизация с биржами (Binance, Bybit через CCXT) и MT5
+│   └── chart_service.py        # Загрузка тиковых и свечных данных (TradingView / Binance / Yahoo)
+│
+├── ui/                         # Модульный пакет интерфейса на Flet 0.25.2
 │   ├── __init__.py             # Экспорт основных сущностей UI
-│   ├── theme.py                # Премиальная Dark Mode тема и дизайн-токены
+│   ├── theme.py                # Премиальная Dark Mode тема (#090A0F), патч тултипов и токены
 │   ├── layout.py               # Корневой каркас с NavigationRail и переключением экранов
 │   ├── views/
-│   │   ├── dashboard.py        # Дашборд с метриками, тильт-фильтром и превью Монте-Карло
-│   │   └── journal.py          # Журнал сделок на виртуализированном ListView + инспектор
+│   │   ├── dashboard.py        # Дашборд с метриками, календарем P&L, тильт-фильтром и Монте-Карло
+│   │   ├── journal.py          # Журнал сделок на виртуализированном ListView + инспектор
+│   │   └── backtest.py         # Симулятор рынка и ручной бэктестинг на японских свечах (Canvas)
 │   └── components/
-│       └── trade_modal.py      # Модальное окно ft.AlertDialog с чек-листом сетапа
+│       ├── trade_modal.py      # Модальное окно ft.AlertDialog с чек-листом сетапа
+│       ├── account_modal.py    # Модальное окно управления счетами и безопасного ввода API-ключей
+│       ├── command_bar.py      # Быстрая командная строка Spotlight / палитра команд (Ctrl+K)
+│       └── pnl_calendar.py     # Интерактивный интерактивный календарь прибылей и убытков
 │
 ├── main.py                     # Главная точка входа с поддержкой desktop и --web
-├── requirements.txt            # Зафиксированные зависимости (flet==0.25.2)
+├── requirements.txt            # Зафиксированные зависимости (flet==0.25.2, numpy>=1.26.0)
 └── README.md                   # Документация проекта
 ```
 
@@ -82,11 +91,11 @@ python main.py --web
 Сборка осуществляется с помощью PyInstaller без отображения системной консоли:
 
 ```bash
-pyinstaller --noconfirm --onedir --windowed --add-data "data;data" main.py -n "TradingJournal"
+pyinstaller --noconfirm --onedir --windowed --add-data "data;data" --add-data "assets;assets" main.py -n "TradingJournal"
 ```
 
 Или в строго один файл (`--onefile`):
 ```bash
-pyinstaller --noconfirm --onefile --windowed main.py -n "TradingJournal"
+pyinstaller --noconfirm --onefile --windowed --add-data "data;data" --add-data "assets;assets" main.py -n "TradingJournal"
 ```
 Файл сборки будет расположен в директории `dist/TradingJournal.exe`.

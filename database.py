@@ -5,10 +5,15 @@
 риск-метриками (R-Multiple, MAE/MFE, Efficiency) и детектированием тильта.
 """
 
+import base64
 from datetime import date, datetime, timedelta
+import hashlib
+import logging
 from pathlib import Path
 import sqlite3
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger(__name__)
 
 from sqlalchemy import (
     Boolean,
@@ -27,7 +32,79 @@ from sqlalchemy.orm import (
     mapped_column,
     relationship,
     sessionmaker,
+    selectinload,
 )
+
+
+def get_secret_key() -> bytes:
+    key_file = Path("data/.secret.key")
+    if key_file.exists():
+        try:
+            k = key_file.read_bytes().strip()
+            if k:
+                return k
+        except Exception:
+            pass
+    try:
+        from cryptography.fernet import Fernet
+        key = Fernet.generate_key()
+        key_file.parent.mkdir(parents=True, exist_ok=True)
+        key_file.write_bytes(key)
+        return key
+    except Exception as e:
+        logger.warning(f"Failed to generate/save secret key: {e}")
+        return b"TradingJournalProFallbackSecretKey32B="
+
+
+_FERNET_CIPHER = None
+
+
+def get_cipher():
+    global _FERNET_CIPHER
+    if _FERNET_CIPHER is None:
+        try:
+            from cryptography.fernet import Fernet
+            key = get_secret_key()
+            _FERNET_CIPHER = Fernet(key)
+        except Exception as e:
+            logger.warning(f"Fernet initialization failed: {e}")
+            _FERNET_CIPHER = None
+    return _FERNET_CIPHER
+
+
+def encrypt_db_secret(secret: Optional[str]) -> Optional[str]:
+    """Шифрует API ключ/секрет перед сохранением в БД."""
+    if not secret:
+        return secret
+    cipher = get_cipher()
+    if cipher:
+        try:
+            return cipher.encrypt(secret.encode("utf-8")).decode("utf-8")
+        except Exception as e:
+            logger.warning(f"Encryption failed, saving plaintext: {e}")
+            return secret
+    return secret
+
+
+def decrypt_db_secret(token: Optional[str]) -> Optional[str]:
+    """Расшифровывает API ключ/секрет с fallback на старый salt и открытый текст."""
+    if not token:
+        return token
+    cipher = get_cipher()
+    if cipher:
+        try:
+            return cipher.decrypt(token.encode("utf-8")).decode("utf-8")
+        except Exception:
+            # Fallback для токенов со старой солью
+            try:
+                from cryptography.fernet import Fernet
+                salt = b"TradingJournalProSecretSalt2026"
+                leg_key = base64.urlsafe_b64encode(hashlib.sha256(salt).digest())
+                return Fernet(leg_key).decrypt(token.encode("utf-8")).decode("utf-8")
+            except Exception:
+                # Fallback для открытого текста
+                return token
+    return token
 
 
 class Base(DeclarativeBase):
@@ -84,8 +161,8 @@ class TradingAccount(Base):
             "name": self.name,
             "broker_type": self.broker_type,
             "exchange_type": self.exchange_type,
-            "api_key": self.api_key,
-            "api_secret": self.api_secret,
+            "api_key": decrypt_db_secret(self.api_key),
+            "api_secret": decrypt_db_secret(self.api_secret),
             "account_number": self.account_number,
             "initial_balance": self.initial_balance if self.initial_balance is not None else 10000.0,
             "currency": self.currency or "USD",
@@ -219,21 +296,23 @@ class Trade(Base):
         if self.mae_price and self.entry_price > 0:
             mae_diff = (self.mae_price - self.entry_price) if is_long else (self.entry_price - self.mae_price)
             self.mae_pct = round(min(mae_diff / self.entry_price * 100, 0.0), 2)
+            effective_mae_price = self.mae_price
         else:
             # Оценочный реалистичный MAE при отсутствии тиковых данных
             self.mae_pct = round(-abs(pct_exit * 0.35) - 0.6, 2)
-            self.mae_price = self.entry_price * (1 + self.mae_pct / 100.0 if is_long else 1 - self.mae_pct / 100.0)
+            effective_mae_price = self.entry_price * (1 + self.mae_pct / 100.0 if is_long else 1 - self.mae_pct / 100.0)
 
         if self.mfe_price and self.entry_price > 0:
             mfe_diff = (self.mfe_price - self.entry_price) if is_long else (self.entry_price - self.mfe_price)
             self.mfe_pct = round(max(mfe_diff / self.entry_price * 100, 0.0), 2)
+            effective_mfe_price = self.mfe_price
         else:
             self.mfe_pct = round(max(pct_exit * 1.3, abs(self.mae_pct) * 1.5, 1.8), 2)
-            self.mfe_price = self.entry_price * (1 + self.mfe_pct / 100.0 if is_long else 1 - self.mfe_pct / 100.0)
+            effective_mfe_price = self.entry_price * (1 + self.mfe_pct / 100.0 if is_long else 1 - self.mfe_pct / 100.0)
 
         # 4. Расчет эффективности удержания (Efficiency)
-        if self.mfe_price and self.mfe_price != self.entry_price:
-            max_move = abs(self.mfe_price - self.entry_price)
+        if effective_mfe_price and effective_mfe_price != self.entry_price:
+            max_move = abs(effective_mfe_price - self.entry_price)
             realized_move = (self.exit_price - self.entry_price) if is_long else (self.entry_price - self.exit_price)
             eff = realized_move / max_move if max_move > 0 else 0.0
             self.efficiency = round(max(0.0, min(1.0, eff)), 2)
@@ -415,7 +494,7 @@ class DatabaseManager:
                         try:
                             cursor.execute(f"ALTER TABLE trading_accounts ADD COLUMN {acc_col} {acc_type}")
                         except Exception as ex:
-                            print(f"[Migration] Warning adding account column {acc_col}: {ex}")
+                            logger.warning(f"[Migration] Warning adding account column {acc_col}: {ex}")
 
                 cursor.execute("UPDATE trading_accounts SET broker_type = exchange_type WHERE broker_type IS NULL OR broker_type = 'MANUAL'")
 
@@ -450,7 +529,7 @@ class DatabaseManager:
                         try:
                             cursor.execute(f"ALTER TABLE trades ADD COLUMN {col_name} {col_def}")
                         except Exception as ex:
-                            print(f"[Migration] Warning adding {col_name}: {ex}")
+                            logger.warning(f"[Migration] Warning adding {col_name}: {ex}")
 
                 # Синхронизация net_pnl с pnl для старых записей
                 if "pnl" in existing_cols:
@@ -501,7 +580,7 @@ class DatabaseManager:
                         END
                     """)
                 except Exception as ex:
-                    print(f"[Migration] Accounts seed warning: {ex}")
+                    logger.warning(f"[Migration] Accounts seed warning: {ex}")
 
                 conn.commit()
         except Exception:
@@ -589,6 +668,82 @@ class DatabaseManager:
             session.refresh(trade)
             return trade
 
+    def bulk_add_trades(self, trades_data: List[Dict[str, Any]]) -> int:
+        """
+        Массовая пакетная вставка сделок в рамках единой транзакции (ACID).
+        Возвращает количество успешно добавленных записей.
+        """
+        if not trades_data:
+            return 0
+
+        count = 0
+        with self.SessionLocal() as session:
+            for item in trades_data:
+                t_open = item.get("opened_at") or item.get("open_time") or datetime.now()
+                t_close = item.get("closed_at") or item.get("close_time") or item.get("date") or datetime.now()
+                if isinstance(t_open, str):
+                    try:
+                        t_open = datetime.fromisoformat(t_open)
+                    except Exception:
+                        t_open = datetime.now()
+                elif hasattr(t_open, "to_pydatetime"):
+                    t_open = t_open.to_pydatetime()
+
+                if isinstance(t_close, str):
+                    try:
+                        t_close = datetime.fromisoformat(t_close)
+                    except Exception:
+                        t_close = datetime.now()
+                elif hasattr(t_close, "to_pydatetime"):
+                    t_close = t_close.to_pydatetime()
+
+                trade = Trade(
+                    account_id=item.get("account_id", 1),
+                    ticker=item.get("ticker", "UNKNOWN"),
+                    direction=item.get("direction", "LONG"),
+                    entry_price=float(item.get("entry_price", 0.0)),
+                    exit_price=float(item.get("exit_price", 0.0)),
+                    volume=float(item.get("volume", 1.0)),
+                    strategy_tag=item.get("strategy_tag", "Manual"),
+                    stop_loss=float(item["stop_loss"]) if item.get("stop_loss") is not None else None,
+                    take_profit=float(item["take_profit"]) if item.get("take_profit") is not None else None,
+                    commission=float(item.get("commission", 0.0)),
+                    swap_fee=float(item.get("swap_fee", 0.0)),
+                    opened_at=t_open,
+                    closed_at=t_close,
+                    checklist_passed=bool(item.get("checklist_passed", True)),
+                    is_tilt=bool(item.get("is_tilt", False)),
+                    tilt_reason=item.get("tilt_reason"),
+                    notes=item.get("notes"),
+                    screenshot_path=item.get("screenshot_path"),
+                    mae_price=float(item["mae_price"]) if item.get("mae_price") is not None else None,
+                    mfe_price=float(item["mfe_price"]) if item.get("mfe_price") is not None else None,
+                )
+                session.add(trade)
+                session.flush()
+
+                entry_order = TradeExecution(
+                    trade_id=trade.id,
+                    action="ENTRY",
+                    price=trade.entry_price,
+                    volume=trade.volume,
+                    fee=round(trade.commission / 2.0, 2),
+                    executed_at=trade.opened_at,
+                )
+                exit_order = TradeExecution(
+                    trade_id=trade.id,
+                    action="EXIT",
+                    price=trade.exit_price,
+                    volume=trade.volume,
+                    fee=round(trade.commission / 2.0, 2),
+                    executed_at=trade.closed_at,
+                )
+                session.add_all([entry_order, exit_order])
+                count += 1
+
+            session.commit()
+        return count
+
     def update_trade(self, trade_id: int, **kwargs) -> Optional[Trade]:
         """
         Обновляет параметры сделки и пересчитывает производные метрики.
@@ -620,12 +775,8 @@ class DatabaseManager:
     def get_trade_by_id(self, trade_id: int) -> Optional[Trade]:
         """Получает сделку по ID с загруженным деревом ордеров."""
         with self.SessionLocal() as session:
-            stmt = select(Trade).where(Trade.id == trade_id)
-            trade = session.scalars(stmt).first()
-            if trade:
-                # Чтение ордеров пока открыта сессия
-                _ = len(trade.executions)
-            return trade
+            stmt = select(Trade).options(selectinload(Trade.executions)).where(Trade.id == trade_id)
+            return session.scalars(stmt).first()
 
     def get_trades(
         self,
@@ -646,7 +797,7 @@ class DatabaseManager:
                 merged_filters["query"] = t_val
 
         with self.SessionLocal() as session:
-            stmt = select(Trade)
+            stmt = select(Trade).options(selectinload(Trade.executions))
 
             if merged_filters:
                 if merged_filters.get("query"):
@@ -704,9 +855,6 @@ class DatabaseManager:
                 stmt = stmt.limit(limit)
 
             trades = list(session.scalars(stmt).all())
-            # Подгрузка ордеров в память
-            for t in trades:
-                _ = len(t.executions)
             return trades
 
     def get_all_trades(self, order_by_date_desc: bool = True) -> List[Trade]:
@@ -746,11 +894,13 @@ class DatabaseManager:
         b_type = (broker_type or exchange_type or "MANUAL").strip().upper()
         curr = (currency or "USD").strip().upper()
         with self.SessionLocal() as session:
+            enc_key = encrypt_db_secret(api_key.strip()) if api_key else None
+            enc_secret = encrypt_db_secret(api_secret.strip()) if api_secret else None
             account = TradingAccount(
                 name=name.strip(),
                 exchange_type=b_type,
-                api_key=api_key.strip() if api_key else None,
-                api_secret=api_secret.strip() if api_secret else None,
+                api_key=enc_key,
+                api_secret=enc_secret,
                 account_number=account_number.strip() if account_number else None,
                 initial_balance=float(initial_balance or 10000.0),
                 currency=curr,
@@ -789,7 +939,7 @@ class DatabaseManager:
         if not external_id:
             return None
         with self.SessionLocal() as session:
-            stmt = select(Trade).where(Trade.external_trade_id == str(external_id))
+            stmt = select(Trade).options(selectinload(Trade.executions)).where(Trade.external_trade_id == str(external_id))
             return session.scalars(stmt).first()
 
     def add_execution(

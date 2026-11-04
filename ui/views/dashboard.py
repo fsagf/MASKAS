@@ -11,6 +11,7 @@ ui/views/dashboard.py
 """
 
 from datetime import date
+import logging
 import threading
 import time
 from typing import Any, Callable, List, Optional
@@ -437,19 +438,19 @@ class DashboardView(ft.Container):
         card.on_hover = _on_hover
         return card
 
-    def _build_monte_carlo_cone_card(self, trades: List[Trade]) -> ft.Container:
+    def _build_monte_carlo_cone_card(self, trades: List[Trade], initial_balance: float = 10000.0) -> ft.Container:
         """
         Блок 'Квантовая симуляция Монте-Карло' с веером вероятностей (Probability Cone).
         Основан на 10 000 итерациях векторного бутстрэпа из AnalyticsService.simulate_monte_carlo.
         """
-        mc = AnalyticsService.simulate_monte_carlo(trades, n_simulations=10000, n_steps=20)
+        mc = AnalyticsService.simulate_monte_carlo(trades, n_simulations=10000, n_steps=20, initial_balance=initial_balance)
 
         percentiles_data = [
-            (mc["p95"], "#818CF8", "95% Оптимистичный"),
-            (mc["p75"], "#6366F1", "75% Умеренный рост"),
-            (mc["p50"], "#A5B4FC", "50% Медиана"),
-            (mc["p25"], "#F472B6", "25% Просадочный"),
-            (mc["p05"], LOSS, "5% Стресс-тест / VaR"),
+            (mc["p95"], "#818CF8", "P95 Оптимистичный"),
+            (mc["p75"], "#6366F1", "P75 Умеренный рост"),
+            (mc["p50"], "#A5B4FC", "P50 Медиана"),
+            (mc["p25"], "#F472B6", "P25 Просадочный"),
+            (mc["p05"], LOSS, "P05 Стресс-тест / VaR"),
         ]
 
         cone_series = []
@@ -458,11 +459,12 @@ class DashboardView(ft.Container):
             pts = []
             for step_idx, val in enumerate(path_pts):
                 all_vals.append(val)
+                p_tag = label.split()[0]
                 pts.append(
                     ft.LineChartDataPoint(
                         step_idx,
                         val,
-                        tooltip=f"{label} (Сделка #{step_idx})\nПрогноз PnL: {val:+,.1f} USD",
+                        tooltip=f"{p_tag} (шаг {step_idx}): ${val:,.0f}",
                         tooltip_style=ft.TextStyle(
                             font_family=FONT_MONO,
                             size=11,
@@ -475,7 +477,7 @@ class DashboardView(ft.Container):
             cone_series.append(
                 ft.LineChartData(
                     data_points=pts,
-                    stroke_width=2.0 if label.startswith("50%") else 1.3,
+                    stroke_width=2.0 if label.startswith("P50") else 1.3,
                     color=col,
                     curved=True,
                     stroke_cap_round=True,
@@ -520,7 +522,7 @@ class DashboardView(ft.Container):
             vertical_grid_lines=ft.ChartGridLines(width=0),
             left_axis=ft.ChartAxis(
                 labels=axis_labels,
-                labels_size=60,
+                labels_size=48,
             ),
             bottom_axis=ft.ChartAxis(visible=False),
             top_axis=ft.ChartAxis(visible=False),
@@ -528,12 +530,12 @@ class DashboardView(ft.Container):
             min_y=min_val - y_padding,
             max_y=max_val + y_padding,
             interactive=True,
-            tooltip_bgcolor="#161A23",
+            tooltip_bgcolor="#12151E",
             tooltip_border_side=ft.BorderSide(1, BORDER_HIGHLIGHT),
             tooltip_rounded_radius=8,
             tooltip_margin=12,
-            tooltip_padding=ft.padding.symmetric(horizontal=12, vertical=8),
-            tooltip_max_content_width=300,
+            tooltip_padding=ft.padding.symmetric(horizontal=10, vertical=6),
+            tooltip_max_content_width=220,
             tooltip_fit_inside_horizontally=True,
             tooltip_fit_inside_vertically=True,
             height=145,
@@ -543,7 +545,7 @@ class DashboardView(ft.Container):
         return ft.Container(
             content=ft.Row(
                 controls=[
-                    # Левая колонка: компактный инфо-блок
+                    # Левая колонка: компактный инфо-блок (expand=2)
                     ft.Container(
                         content=ft.Column(
                             controls=[
@@ -580,12 +582,12 @@ class DashboardView(ft.Container):
                             ],
                             spacing=6,
                         ),
-                        width=340,
+                        expand=2,
                     ),
 
                     ft.VerticalDivider(width=1, color=BORDER_SUBTLE),
 
-                    # Правая колонка: интерактивный веер траекторий
+                    # Правая колонка: интерактивный веер траекторий (expand=3)
                     ft.Container(
                         content=ft.Column(
                             controls=[
@@ -607,18 +609,18 @@ class DashboardView(ft.Container):
                             spacing=6,
                             expand=True,
                         ),
-                        expand=True,
+                        expand=3,
                     ),
                 ],
-                spacing=24,
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                spacing=14,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
             ),
             gradient=ft.LinearGradient(
                 begin=ft.alignment.top_left,
                 end=ft.alignment.bottom_right,
                 colors=["#141724", SURFACE_1],
             ),
-            padding=18,
+            padding=16,
             border_radius=RADIUS_LG,
             border=ft.border.all(1.2, ft.Colors.with_opacity(0.35, ACCENT_PRIMARY)),
             shadow=create_neon_box_shadow(ACCENT_PRIMARY, blur=16, opacity=0.18),
@@ -861,87 +863,111 @@ class DashboardView(ft.Container):
         is_tilt_filtered = bool(self.tilt_switch.value)
         metrics: DashboardMetrics = AnalyticsService.calculate_metrics(trades, exclude_tilt=is_tilt_filtered)
 
-        # Обновляем календарь новыми сделками
-        self.pnl_calendar.set_trades(trades)
-
-        winrate_spark = metrics.winrate_sparkline if metrics.winrate_sparkline else [50.0, 50.0]
-        pf_spark = metrics.profit_factor_sparkline if metrics.profit_factor_sparkline else [1.5, 1.5]
-
-        # R-Multiple и Expectancy
-        if metrics.avg_r_multiple != 0.0:
-            r_multiple_val = f"{metrics.avg_r_multiple:+.2f} R"
+        # Вычисляем начальный баланс активного счёта или сумму всех счетов
+        if self.current_account_id:
+            acc = self.db.get_account_by_id(self.current_account_id)
+            init_bal = acc.initial_balance if acc else 10000.0
         else:
-            r_multiple_val = "0.00 R"
+            accs = self.db.get_accounts()
+            init_bal = sum(a.initial_balance for a in accs) if accs else 10000.0
 
-        # Сетка карточек метрик (Hero + Свечение рекордов + Издержки брокера)
-        self.metrics_grid.controls = [
-            ft.Container(self._build_hero_card(metrics, is_tilt_filtered), col={"sm": 12, "md": 6, "lg": 3}),
-            ft.Container(
-                self._build_metric_card(
-                    "Винрейт (Winrate)",
-                    f"{metrics.winrate:.1f}%",
-                    val_color=PROFIT if metrics.winrate >= 50 else LOSS,
-                    sparkline_data=winrate_spark,
-                    has_glow=metrics.winrate >= 55,
-                ),
-                col={"sm": 6, "md": 4, "lg": 1.8},
-            ),
-            ft.Container(
-                self._build_metric_card(
-                    "Профит-фактор",
-                    f"{metrics.profit_factor:.2f}",
-                    val_color=PROFIT if metrics.profit_factor >= 1.5 else (WARNING_TILT if metrics.profit_factor >= 1.0 else LOSS),
-                    sparkline_data=pf_spark,
-                    has_glow=metrics.profit_factor >= 2.0,
-                ),
-                col={"sm": 6, "md": 4, "lg": 1.7},
-            ),
-            ft.Container(
-                self._build_metric_card("Сделок", str(metrics.total_trades), subtitle=f"Ср: {metrics.avg_trade_pnl:+.2f}$"),
-                col={"sm": 6, "md": 4, "lg": 1.4},
-            ),
-            ft.Container(
-                self._build_metric_card(
-                    "R-Multiple",
-                    r_multiple_val,
-                    subtitle="Ср. риск/прибыль",
-                    tag="QUANT",
-                    val_color=ACCENT_PRIMARY,
-                    has_glow=(metrics.avg_r_multiple >= 2.0),
-                ),
-                col={"sm": 6, "md": 4, "lg": 1.6},
-            ),
-            ft.Container(
-                self._build_broker_costs_card(metrics),
-                col={"sm": 12, "md": 6, "lg": 2.5},
-            ),
-        ]
+        # 1. P&L Календарь (Error Boundary)
+        try:
+            self.pnl_calendar.set_trades(trades)
+        except Exception as e:
+            logging.exception(f"[DashboardView] Error setting PnL calendar trades: {e}")
 
-        # Обновление блока Монте-Карло с реальными данными симуляции
-        self.monte_carlo_container.content = self._build_monte_carlo_cone_card(trades)
+        # 2. Сетка KPI метрик (Error Boundary)
+        try:
+            winrate_spark = metrics.winrate_sparkline if metrics.winrate_sparkline else [50.0, 50.0]
+            pf_spark = metrics.profit_factor_sparkline if metrics.profit_factor_sparkline else [1.5, 1.5]
 
-        # Отрисовка интерактивной живой Equity Curve (Фактический капитал + What-If без тильта)
-        if not trades:
-            self.chart_container.content = ft.Container(
-                content=ft.Column(
-                    controls=[
-                        ft.Icon(ft.Icons.SHOW_CHART_ROUNDED, size=46, color=TEXT_MUTED),
-                        ft.Text("Сделок в базе пока нет", size=15, color=TEXT_SECONDARY, weight=ft.FontWeight.W_500, font_family=FONT_FAMILY),
-                        ft.Text("Добавьте сделки через кнопку на панели навигации", size=12, color=TEXT_MUTED, font_family=FONT_FAMILY),
-                    ],
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    alignment=ft.MainAxisAlignment.CENTER,
+            # R-Multiple и Expectancy
+            if metrics.avg_r_multiple != 0.0:
+                r_multiple_val = f"{metrics.avg_r_multiple:+.2f} R"
+            else:
+                r_multiple_val = "0.00 R"
+
+            self.metrics_grid.controls = [
+                ft.Container(self._build_hero_card(metrics, is_tilt_filtered), col={"sm": 12, "md": 6, "lg": 3}),
+                ft.Container(
+                    self._build_metric_card(
+                        "Винрейт (Winrate)",
+                        f"{metrics.winrate:.1f}%",
+                        val_color=PROFIT if metrics.winrate >= 50 else LOSS,
+                        sparkline_data=winrate_spark,
+                        has_glow=metrics.winrate >= 55,
+                    ),
+                    col={"sm": 6, "md": 4, "lg": 1.8},
                 ),
-                alignment=ft.alignment.center,
-                height=220,
+                ft.Container(
+                    self._build_metric_card(
+                        "Профит-фактор",
+                        f"{metrics.profit_factor:.2f}",
+                        val_color=PROFIT if metrics.profit_factor >= 1.5 else (WARNING_TILT if metrics.profit_factor >= 1.0 else LOSS),
+                        sparkline_data=pf_spark,
+                        has_glow=metrics.profit_factor >= 2.0,
+                    ),
+                    col={"sm": 6, "md": 4, "lg": 1.7},
+                ),
+                ft.Container(
+                    self._build_metric_card("Сделок", str(metrics.total_trades), subtitle=f"Ср: {metrics.avg_trade_pnl:+.2f}$"),
+                    col={"sm": 6, "md": 4, "lg": 1.4},
+                ),
+                ft.Container(
+                    self._build_metric_card(
+                        "R-Multiple",
+                        r_multiple_val,
+                        subtitle="Ср. риск/прибыль",
+                        tag="QUANT",
+                        val_color=ACCENT_PRIMARY,
+                        has_glow=(metrics.avg_r_multiple >= 2.0),
+                    ),
+                    col={"sm": 6, "md": 4, "lg": 1.6},
+                ),
+                ft.Container(
+                    self._build_broker_costs_card(metrics),
+                    col={"sm": 12, "md": 6, "lg": 2.5},
+                ),
+            ]
+        except Exception as e:
+            logging.exception(f"[DashboardView] Error rendering KPI metrics: {e}")
+            self.metrics_grid.controls = [
+                ft.Container(content=ft.Text(f"Ошибка рендеринга блока KPI: {e}", color="#EF4444"), padding=12)
+            ]
+
+        # 3. Обновление блока Монте-Карло (Error Boundary)
+        try:
+            self.monte_carlo_container.content = self._build_monte_carlo_cone_card(trades, initial_balance=init_bal)
+        except Exception as e:
+            logging.exception(f"[DashboardView] Error rendering Monte Carlo: {e}")
+            self.monte_carlo_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга блока Монте-Карло: {e}", color="#EF4444"),
+                padding=12,
             )
-        else:
-            all_df = AnalyticsService.trades_to_dataframe(trades)
-            all_df["equity"] = all_df["net_pnl"].cumsum()
-            line_color = PROFIT if all_df["equity"].iloc[-1] >= 0 else LOSS
 
-            if hasattr(ft, "LineChart"):
-                try:
+        # 4. Отрисовка интерактивной живой Equity Curve (Error Boundary)
+        try:
+            if not trades:
+                self.chart_container.content = ft.Container(
+                    content=ft.Column(
+                        controls=[
+                            ft.Icon(ft.Icons.SHOW_CHART_ROUNDED, size=46, color=TEXT_MUTED),
+                            ft.Text("Сделок в базе пока нет", size=15, color=TEXT_SECONDARY, weight=ft.FontWeight.W_500, font_family=FONT_FAMILY),
+                            ft.Text("Добавьте сделки через кнопку на панели навигации", size=12, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                    ),
+                    alignment=ft.alignment.center,
+                    height=220,
+                )
+            else:
+                all_df = AnalyticsService.trades_to_dataframe(trades)
+                all_df["equity"] = all_df["net_pnl"].cumsum()
+                line_color = PROFIT if all_df["equity"].iloc[-1] >= 0 else LOSS
+
+                if hasattr(ft, "LineChart"):
                     tt_style = ft.TextStyle(font_family=FONT_MONO, size=11, color=TEXT_PRIMARY, weight=ft.FontWeight.W_500)
                     points = [ft.LineChartDataPoint(0, 0, tooltip="Старт: 0.00 USD", tooltip_style=tt_style, show_tooltip=True)]
                     min_y = 0.0
@@ -954,7 +980,7 @@ class DashboardView(ft.Container):
                             ft.LineChartDataPoint(
                                 idx,
                                 eq,
-                                tooltip=f"Сделка #{idx} • {row.ticker}\nРезультат: {pnl_sign}{row.net_pnl:,.2f} USD\nДепозит: {eq:,.2f} USD",
+                                tooltip=f"({row.ticker})\nNet PnL: ${row.net_pnl:+,.2f}\nДепозит: ${eq:,.2f}",
                                 tooltip_style=tt_style,
                                 show_tooltip=True,
                             )
@@ -993,7 +1019,7 @@ class DashboardView(ft.Container):
                                 ft.LineChartDataPoint(
                                     idx,
                                     round(curr_eq, 2),
-                                    tooltip=f"What-If #{idx} (Без тильта)\nДепозит: {curr_eq:,.2f} USD",
+                                    tooltip=f"What-If #{idx} (Без тильта)\nДепозит: ${curr_eq:,.2f}",
                                     tooltip_style=tt_style,
                                     show_tooltip=True,
                                 )
@@ -1038,7 +1064,7 @@ class DashboardView(ft.Container):
                         min_x=0,
                         max_x=len(all_df),
                         interactive=True,
-                        tooltip_bgcolor="#161A23",
+                        tooltip_bgcolor="#12151E",
                         tooltip_border_side=ft.BorderSide(1, BORDER_HIGHLIGHT),
                         tooltip_rounded_radius=8,
                         tooltip_margin=12,
@@ -1050,27 +1076,27 @@ class DashboardView(ft.Container):
                         expand=True,
                     )
                     self.chart_container.content = chart
-                except Exception as ex:
-                    print(f"[DashboardView] Error rendering Equity Chart: {ex}")
+                else:
                     self.chart_container.content = ft.Container(
-                        content=ft.Text("Ошибка загрузки графика доходности", color=ft.Colors.ERROR),
+                        content=ft.Column(
+                            controls=[
+                                ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=40, color=PROFIT),
+                                ft.Text(f"Итоговый депозит: {all_df['equity'].iloc[-1]:+,.2f} $", size=16, color=line_color, weight=ft.FontWeight.BOLD, font_family=FONT_MONO),
+                                ft.ElevatedButton("Посмотреть в Plotly", on_click=lambda _: self.on_open_plotly()),
+                            ],
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                            alignment=ft.MainAxisAlignment.CENTER,
+                        ),
+                        height=220,
                         alignment=ft.alignment.center,
-                        height=240,
                     )
-            else:
-                self.chart_container.content = ft.Container(
-                    content=ft.Column(
-                        controls=[
-                            ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=40, color=PROFIT),
-                            ft.Text(f"Итоговый депозит: {df['equity'].iloc[-1]:+,.2f} $", size=16, color=line_color, weight=ft.FontWeight.BOLD, font_family=FONT_MONO),
-                            ft.ElevatedButton("Посмотреть в Plotly", on_click=lambda _: self.on_open_plotly()),
-                        ],
-                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                        alignment=ft.MainAxisAlignment.CENTER,
-                    ),
-                    height=220,
-                    alignment=ft.alignment.center,
-                )
+        except Exception as ex:
+            logging.exception(f"[DashboardView] Error rendering Equity Chart: {ex}")
+            self.chart_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга блока графика: {ex}", color=ft.Colors.ERROR),
+                alignment=ft.alignment.center,
+                height=240,
+            )
 
         if self.page:
             self.update()
