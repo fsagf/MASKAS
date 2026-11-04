@@ -427,14 +427,15 @@ class TradeModal(ft.AlertDialog):
                     checklist_block,
                     screenshot_block,
                     self.error_text,
+                    ft.Container(height=16),  # Гарантированный отступ от кнопок действий
                 ],
                 spacing=10,
                 scroll=ft.ScrollMode.ADAPTIVE,
                 tight=True,
             ),
             width=620,
-            height=520,
-            padding=ft.padding.only(top=6),
+            height=490,
+            padding=ft.padding.only(top=6, bottom=8),
         )
 
     def _safe_update(self) -> None:

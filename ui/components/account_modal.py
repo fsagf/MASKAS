@@ -210,14 +210,15 @@ class AccountModal(ft.AlertDialog):
                         ],
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
+                    ft.Container(height=14),  # Защитный отступ от панели действий
                 ],
                 spacing=12,
                 scroll=ft.ScrollMode.ADAPTIVE,
                 tight=True,
             ),
             width=680,
-            height=490,
-            padding=ft.padding.symmetric(horizontal=10, vertical=4),
+            height=470,
+            padding=ft.padding.only(left=10, right=10, top=4, bottom=12),
         )
 
         super().__init__(

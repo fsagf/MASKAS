@@ -595,37 +595,44 @@ class JournalView(ft.Container):
         is_x_close = abs(ext_xc - ent_xc) < 70
         is_y_close = abs(ext_yc - ent_yc) < 22
 
+        exit_w = len(exit_lbl) * 5.6 + 12
         if is_x_close:
-            ent_x = max(ent_xc - 62, left_pad)
-            ext_x = min(ext_xc + 6, canvas_w - 90)
+            ent_x = max(ent_xc - 66, left_pad)
+            ext_x = min(ext_xc + 8, canvas_w - exit_w - 6)
             if is_y_close:
-                ent_y = min(ent_yc + 6, canvas_h - 12)
-                ext_y = max(ext_yc - 14, 4)
+                ent_y = min(ent_yc + 7, canvas_h - 15)
+                ext_y = max(ext_yc - 16, 4)
             else:
-                ent_y = min(ent_yc + 4, canvas_h - 12) if is_long else max(ent_yc - 14, 4)
-                ext_y = max(ext_yc - 14, 4) if is_long else min(ext_yc + 4, canvas_h - 12)
+                ent_y = min(ent_yc + 5, canvas_h - 15) if is_long else max(ent_yc - 15, 4)
+                ext_y = max(ext_yc - 15, 4) if is_long else min(ext_yc + 5, canvas_h - 15)
         else:
-            ent_x = max(ent_xc - 24, left_pad)
-            ext_x = max(ext_xc - 28, left_pad)
-            ent_y = min(ent_yc + 5, canvas_h - 12) if is_long else max(ent_yc - 14, 4)
-            ext_y = max(ext_yc - 14, 4) if is_long else min(ext_yc + 5, canvas_h - 12)
+            ent_x = max(ent_xc - 28, left_pad)
+            ext_x = max(min(ext_xc - 28, canvas_w - exit_w - 6), left_pad)
+            ent_y = min(ent_yc + 6, canvas_h - 15) if is_long else max(ent_yc - 15, 4)
+            ext_y = max(ext_yc - 15, 4) if is_long else min(ext_yc + 6, canvas_h - 15)
 
-        shapes.append(
-            cv.Text(
-                x=ent_x,
-                y=ent_y,
-                text=entry_lbl,
-                style=ft.TextStyle(size=8, weight=ft.FontWeight.BOLD, color=ent_col, font_family=FONT_MONO),
+        def _add_trade_badge(bx: float, by: float, text: str, col: str):
+            bw = len(text) * 5.6 + 8
+            bh = 13
+            # Темная плашка-маска для исключения наложения линий сетки/свечей на текст
+            shapes.append(
+                cv.Rect(bx - 3, by - 1, bw, bh, border_radius=3, paint=ft.Paint(color="#090C15", style=ft.PaintingStyle.FILL))
             )
-        )
-        shapes.append(
-            cv.Text(
-                x=ext_x,
-                y=ext_y,
-                text=exit_lbl,
-                style=ft.TextStyle(size=8, weight=ft.FontWeight.BOLD, color=ext_col, font_family=FONT_MONO),
+            # Тонкая рамка цвета маркера (Institutional Tag style)
+            shapes.append(
+                cv.Rect(bx - 3, by - 1, bw, bh, border_radius=3, paint=ft.Paint(color=f"{col}66", stroke_width=0.8, style=ft.PaintingStyle.STROKE))
             )
-        )
+            shapes.append(
+                cv.Text(
+                    x=bx + 1,
+                    y=by,
+                    text=text,
+                    style=ft.TextStyle(size=8, weight=ft.FontWeight.BOLD, color=col, font_family=FONT_MONO),
+                )
+            )
+
+        _add_trade_badge(ent_x, ent_y, entry_lbl, ent_col)
+        _add_trade_badge(ext_x, ext_y, exit_lbl, ext_col)
 
         canvas = cv.Canvas(
             shapes=shapes,
