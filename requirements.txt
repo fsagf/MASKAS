@@ -10,5 +10,6 @@ yfinance>=0.2.30
 ccxt>=4.0.0
 cryptography>=41.0.0
 pyngrok>=7.0.0
+qrcode>=8.0
 # MetaTrader5 (опционально для Windows x64 с Python <= 3.12)
 # MetaTrader5>=5.0.0; python_version <= '3.12'
