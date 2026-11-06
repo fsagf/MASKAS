@@ -319,3 +319,62 @@ def test_session_performance_matrix():
     assert res["best_session"] in ("ASIAN", "LONDON")
 
 
+def test_time_heatmap_matrix():
+    """Verify Day-of-Week and Hour-of-Day aggregation and cell calculations."""
+    # Empty trades test
+    empty_hm = AnalyticsService.calculate_time_heatmap([])
+    assert "cells" in empty_hm
+    assert len(empty_hm["cells"]) == 7
+    for d in range(7):
+        assert len(empty_hm["cells"][d]) == 24
+    assert empty_hm["best_day"] is None
+    assert empty_hm["best_hour"] is None
+
+    # Populate test trades on specific days/hours
+    # Wednesday (weekday 2), 14:00 UTC (hour 14) -> +$500
+    t_wed = Trade(
+        ticker="BTC/USDT",
+        direction="LONG",
+        entry_price=50000.0,
+        exit_price=50500.0,
+        volume=1.0,
+        opened_at=datetime.datetime(2026, 3, 4, 14, 20, 0),  # Wednesday
+    )
+    # Friday (weekday 4), 18:00 UTC (hour 18) -> -$300
+    t_fri = Trade(
+        ticker="ETH/USDT",
+        direction="LONG",
+        entry_price=3000.0,
+        exit_price=2850.0,
+        volume=2.0,
+        opened_at=datetime.datetime(2026, 3, 6, 18, 5, 0),  # Friday
+    )
+
+    hm = AnalyticsService.calculate_time_heatmap([t_wed, t_fri])
+    cells = hm["cells"]
+
+    # Check Wednesday 14:00
+    c_wed = cells[2][14]
+    assert c_wed["count"] == 1
+    assert c_wed["net_pnl"] == 500.0
+    assert c_wed["winrate"] == 100.0
+
+    # Check Friday 18:00
+    c_fri = cells[4][18]
+    assert c_fri["count"] == 1
+    assert c_fri["net_pnl"] == -300.0
+    assert c_fri["winrate"] == 0.0
+
+    # Check unpopulated cell
+    assert cells[0][0]["count"] == 0
+    assert cells[0][0]["net_pnl"] == 0.0
+
+    # Day aggregates
+    assert hm["day_aggregates"][2]["net_pnl"] == 500.0
+    assert hm["day_aggregates"][4]["net_pnl"] == -300.0
+    assert hm["best_day"]["day_idx"] == 2
+    assert hm["worst_day"]["day_idx"] == 4
+    assert hm["best_hour"]["hour"] == 14
+
+
+

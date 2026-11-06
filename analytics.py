@@ -614,6 +614,111 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_time_heatmap(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Матрица прибыльности Day-of-Week & Hour-of-Day (Тепловая карта времени):
+        - Дни недели: Пн(0) .. Вс(6)
+        - Часы суток: 0 .. 23 (UTC)
+        """
+        day_names = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+
+        # Инициализация сетки 7x24
+        grid: Dict[int, Dict[int, List[float]]] = {d: {h: [] for h in range(24)} for d in range(7)}
+
+        for t in trades:
+            dt = t.opened_at or t.closed_at or getattr(t, "date", None)
+            if not dt:
+                continue
+            if isinstance(dt, str):
+                try:
+                    dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+                except Exception:
+                    continue
+
+            d = dt.weekday()
+            h = dt.hour
+            if 0 <= d < 7 and 0 <= h < 24:
+                grid[d][h].append(float(t.net_pnl or 0.0))
+
+        # Формирование агрегатов ячеек
+        cells: Dict[int, Dict[int, Dict[str, Any]]] = {}
+        all_cell_pnls = []
+
+        day_aggregates: Dict[int, Dict[str, Any]] = {}
+        for d in range(7):
+            day_pnls = []
+            cells[d] = {}
+            for h in range(24):
+                pnls = grid[d][h]
+                count = len(pnls)
+                net_pnl = round(sum(pnls), 2)
+                wins = len([p for p in pnls if p > 0])
+                wr = round(wins / count * 100, 1) if count > 0 else 0.0
+
+                cells[d][h] = {
+                    "day_idx": d,
+                    "day_name": day_names[d],
+                    "hour": h,
+                    "count": count,
+                    "net_pnl": net_pnl,
+                    "winrate": wr,
+                }
+                if count > 0:
+                    all_cell_pnls.append(net_pnl)
+                    day_pnls.extend(pnls)
+
+            day_count = len(day_pnls)
+            day_net = round(sum(day_pnls), 2)
+            day_wins = len([p for p in day_pnls if p > 0])
+            day_aggregates[d] = {
+                "day_idx": d,
+                "day_name": day_names[d],
+                "count": day_count,
+                "net_pnl": day_net,
+                "winrate": round(day_wins / day_count * 100, 1) if day_count > 0 else 0.0,
+            }
+
+        # Агрегаты по часам суток (0..23)
+        hour_aggregates: Dict[int, Dict[str, Any]] = {}
+        for h in range(24):
+            h_pnls = []
+            for d in range(7):
+                h_pnls.extend(grid[d][h])
+            h_count = len(h_pnls)
+            h_net = round(sum(h_pnls), 2)
+            h_wins = len([p for p in h_pnls if p > 0])
+            hour_aggregates[h] = {
+                "hour": h,
+                "count": h_count,
+                "net_pnl": h_net,
+                "winrate": round(h_wins / h_count * 100, 1) if h_count > 0 else 0.0,
+            }
+
+        max_pos = max([p for p in all_cell_pnls if p > 0] or [100.0])
+        max_neg = abs(min([p for p in all_cell_pnls if p < 0] or [-100.0]))
+
+        active_days = [da for da in day_aggregates.values() if da["count"] > 0]
+        best_day = max(active_days, key=lambda x: x["net_pnl"]) if active_days else None
+        worst_day = min(active_days, key=lambda x: x["net_pnl"]) if active_days else None
+
+        active_hours = [ha for ha in hour_aggregates.values() if ha["count"] > 0]
+        best_hour = max(active_hours, key=lambda x: x["net_pnl"]) if active_hours else None
+        worst_hour = min(active_hours, key=lambda x: x["net_pnl"]) if active_hours else None
+
+        return {
+            "cells": cells,
+            "day_aggregates": day_aggregates,
+            "hour_aggregates": hour_aggregates,
+            "max_pos_pnl": max_pos,
+            "max_neg_pnl": max_neg,
+            "best_day": best_day,
+            "worst_day": worst_day,
+            "best_hour": best_hour,
+            "worst_hour": worst_hour,
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

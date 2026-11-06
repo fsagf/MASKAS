@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 2 (Completed) -> Starting Iteration 3
+- **Iteration:** 3 (Completed) -> Starting Iteration 4
 - **Current Phase:** Phase 4: Full Regression & Close Loop
-- **Status:** All 34 Tests Green (100% Passing). Session Performance Matrix Deployed.
+- **Status:** All 35 Tests Green (100% Passing). Day & Hour Heatmap Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://172.20.10.4:8550` (Daemon task running)
 
@@ -35,22 +35,26 @@
   - Detects Top Session (leader) and Risk Zone (drawdown session).
   - Created interactive card `_build_session_matrix_card` with responsive progress bars, session colors, and leader highlight chips.
   - Integrated into `DashboardView` below the Monte Carlo and Calendar row.
+- [x] **Interactive Day-of-Week & Hour-of-Day PnL Heatmap (Iteration 3):**
+  - Implemented `AnalyticsService.calculate_time_heatmap(trades)` in `analytics.py`: 7x24 grid mapping profit/loss to days (Mon–Sun) and hours (00–23 UTC).
+  - Created `TimeHeatmap` component in `ui/components/time_heatmap.py` with responsive horizontal scrolling, color-scaled cells (emerald profit / coral loss), tooltips with trade count and winrate, right-hand daily totals, and peak hour highlight chip.
+  - Integrated into `DashboardView` with error-boundary updates.
 - [x] **Monte Carlo Simulator:** 10,000 bootstrap simulations accounting for initial account balance and equity cone percentiles (5th, 50th, 95th).
 - [x] **Tilt & Psychology Engine:** Detects revenge trading (<10 min cooldown after loss), over-risking (>2x avg risk), and break-even violation patterns.
 - [x] **Wave AI Coach:** Rule-based quant trading coach diagnosing fee drag, MAE/MFE retention loss, and risk discipline.
 - [x] **High-Performance Local Server Runner:** `run_local_server.py` with multi-adapter IP detection, VPN warning, terminal ASCII QR-code, and 1-click `ЗАПУСК_СЕРВЕРА.bat`.
-- [x] **Total QA Suite (34 tests):**
+- [x] **Total QA Suite (35 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 7 tests (including SQN, Sharpe & Sortino, and Session Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 8 tests (including SQN, Sharpe/Sortino, Session Matrix, Time Heatmap).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Session Matrix card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Time Heatmap component render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 3+)
-- [ ] **TradeZella:** Interactive Day-of-Week & Hour-of-Day PnL Heatmap with tooltips (Iteration 3 Target).
+## Competitor Backlog (R&D for Iteration 4+)
+- [ ] **Quant Trading:** Kelly Criterion Calculator (optimal position size fraction \(f^* = \frac{p(b+1) - 1}{b}\) based on winrate and payoff ratio) & Half-Kelly recommendation.
+- [ ] **Edgewonk:** Strategy / Setup Leaderboard with 1-click filter in Journal.
 - [ ] **TraderSync / Linear:** Linear-style keyboard shortcut command palette (Ctrl+K) for instant trade lookup and modal triggers.
-- [ ] **Edgewonk:** Setup / Strategy Efficiency Matrix (ranking strategy tags by profit factor & SQN).
-- [ ] **Quant Trading:** Kelly Criterion calculator (optimal risk allocation per trade based on winrate and payoff ratio).
+- [ ] **TradeZella:** Consecutive Win/Loss Streaks Distribution Analysis.

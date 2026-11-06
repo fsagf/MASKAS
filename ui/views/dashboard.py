@@ -20,6 +20,7 @@ import flet as ft
 from analytics import AnalyticsService, DashboardMetrics
 from database import DatabaseManager, Trade
 from ui.components.pnl_calendar import PnLCalendar
+from ui.components.time_heatmap import TimeHeatmap
 from ui.theme import (
     ACCENT_PRIMARY,
     ACCENT_SECONDARY,
@@ -116,6 +117,7 @@ class DashboardView(ft.Container):
         self.monte_carlo_container = ft.Container()
         self.session_matrix_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
+        self.time_heatmap = TimeHeatmap()
 
         # Переключатель тильт-фильтра
         self.tilt_switch = ft.Switch(
@@ -257,6 +259,8 @@ class DashboardView(ft.Container):
                 calendar_and_quant,
                 ft.Container(height=4),
                 self.session_matrix_container,
+                ft.Container(height=4),
+                self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
             ],
             spacing=10,
@@ -1272,6 +1276,12 @@ class DashboardView(ft.Container):
                 content=ft.Text(f"Ошибка рендеринга матрицы сессий: {ex_sess}", color=ft.Colors.ERROR),
                 padding=12,
             )
+
+        # 6. Обновление тепловой карты времени (Error Boundary)
+        try:
+            self.time_heatmap.set_trades(trades)
+        except Exception as ex_hm:
+            logging.exception(f"[DashboardView] Error updating Time Heatmap: {ex_hm}")
 
         if self.page:
             self.update()

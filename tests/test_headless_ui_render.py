@@ -11,6 +11,7 @@ from ui.components.trade_modal import TradeModal
 from ui.components.account_modal import AccountModal
 from ui.components.command_bar import CommandBar
 from ui.components.pnl_calendar import PnLCalendar
+from ui.components.time_heatmap import TimeHeatmap
 
 
 def create_mock_db():
@@ -37,6 +38,7 @@ def test_dashboard_view_headless_render():
     assert hasattr(dash, "chart_container")
     assert hasattr(dash, "monte_carlo_container")
     assert hasattr(dash, "session_matrix_container")
+    assert hasattr(dash, "time_heatmap")
     assert hasattr(dash, "pnl_calendar")
     assert hasattr(dash, "tilt_switch")
     assert dash.content is not None
@@ -44,6 +46,9 @@ def test_dashboard_view_headless_render():
     # Verify session matrix card renders cleanly
     session_card = dash._build_session_matrix_card(trades=[])
     assert session_card is not None
+
+    # Verify time heatmap component renders cleanly
+    assert dash.time_heatmap.content is not None
 
 
 def test_journal_view_headless_render():
@@ -96,3 +101,8 @@ def test_modals_and_components_headless_render():
     # 4. PnL Calendar Widget
     cal = PnLCalendar(trades=[], on_date_selected=lambda d: None)
     assert cal is not None
+
+    # 5. Time Heatmap Widget
+    thm = TimeHeatmap(trades=[])
+    assert thm is not None
+    assert thm.content is not None
