@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 19 (Completed) -> Starting Iteration 20
+- **Iteration:** 20 (Completed) -> Starting Iteration 21
 - **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 50 Tests Green (100% Passing). Pre-Trade Routine & Checklist Compliance Engine Deployed.
+- **Status:** All 51 Tests Green (100% Passing). Market Session Overlap Alpha Matrix Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -137,16 +137,22 @@
   - Computes Compliance Grade (`A+`, `B`, `C`, `F`) and per-criterion compliance percentages.
   - Created `_build_compliance_routine_card` in `ui/views/dashboard.py` with 3 responsive bracket cards, 4 criteria progress bars, and alpha correlation insight bar.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (50 tests):**
+- [x] **Market Session Overlap Alpha Matrix & Liquidity Window Engine (Iteration 20):**
+  - Implemented `AnalyticsService.calculate_session_overlap_matrix(trades)`: classifies trades into 4 institutional liquidity windows (`London + NY Overlap 13:00–17:00 UTC`, `Asia/London Transition 07:00–09:00 UTC`, `NY Afternoon Close 17:00–21:00 UTC`, `Off-Peak Chop 21:00–07:00 UTC`).
+  - Computes Winrate %, Net PnL, Profit Factor, Volume Share %, and Overlap Alpha Ratio (`London/NY Overlap WR / Off-Peak WR`).
+  - Discovers top institutional liquidity window and delivers actionable session timing insights.
+  - Created `_build_session_overlap_card` in `ui/views/dashboard.py` featuring 4 responsive window cards with progress bars, TOP WINDOW badge, and Alpha header chip.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (51 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 23 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 24 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Compliance Routine Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Session Overlap Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 20+)
+## Competitor Backlog (R&D for Iteration 21+)
 - [ ] **TraderSync:** Setup Grading & Quality Score Matrix (A+ / B / C Playbook Execution Winrate & Profit Factor).
-- [ ] **Edgewonk / TradeZella:** Market Session Overlap Alpha Matrix (London/NY overlap vs Tokyo/London transition edge).
+- [ ] **TradeZella:** Interactive Trade Tag Word Cloud & Setup PnL Treemap Engine.

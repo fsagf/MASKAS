@@ -2638,6 +2638,159 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_session_overlap_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ доходности в окнах ликвидности и перекрытиях торговых сессий (Market Session Overlap Alpha Matrix).
+        Классифицирует сделки по 4 ключевым временным окнам институциональной ликвидности (UTC):
+        - LONDON_NY_OVERLAP (13:00–17:00 UTC): Перекрытие Лондон + Нью-Йорк (Максимальный мировой объем)
+        - ASIA_LONDON_TRANSITION (07:00–09:00 UTC): Переход Азия -> Лондон (Утренние импульсы)
+        - NY_AFTERNOON_CLOSE (17:00–21:00 UTC): Вторая половина американской сессии (Тренд индексов)
+        - OFF_PEAK_CHOP (21:00–07:00 UTC): Низкая ликвидность и паузы между сессиями
+        """
+        windows_def = {
+            "LONDON_NY_OVERLAP": {
+                "key": "LONDON_NY_OVERLAP",
+                "name": "Лондон + Нью-Йорк",
+                "time_span": "13:00–17:00 UTC",
+                "desc": "Пиковая мировая ликвидность",
+                "color": "#10B981",
+                "icon": "public_rounded",
+            },
+            "ASIA_LONDON_TRANSITION": {
+                "key": "ASIA_LONDON_TRANSITION",
+                "name": "Стык Азия / Лондон",
+                "time_span": "07:00–09:00 UTC",
+                "desc": "Открытие Европы и утренний импульс",
+                "color": "#38BDF8",
+                "icon": "wb_twilight_rounded",
+            },
+            "NY_AFTERNOON_CLOSE": {
+                "key": "NY_AFTERNOON_CLOSE",
+                "name": "Нью-Йорк (День/Закрытие)",
+                "time_span": "17:00–21:00 UTC",
+                "desc": "Американские тренды и фиксация",
+                "color": "#F59E0B",
+                "icon": "wb_sunny_rounded",
+            },
+            "OFF_PEAK_CHOP": {
+                "key": "OFF_PEAK_CHOP",
+                "name": "Низкая ликвидность / Флэт",
+                "time_span": "21:00–07:00 UTC",
+                "desc": "Азиатский боковик и паузы",
+                "color": "#64748B",
+                "icon": "bedtime_rounded",
+            },
+        }
+
+        if not trades:
+            empty_res = {}
+            for k, meta in windows_def.items():
+                empty_res[k] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                    "share_pct": 0.0,
+                }
+            return {
+                "windows": empty_res,
+                "best_window": None,
+                "worst_window": None,
+                "overlap_alpha_ratio": 1.0,
+                "overlap_insight": "Анализ окон ликвидности активен",
+                "total_trades": 0,
+            }
+
+        def detect_window(t: Trade) -> str:
+            dt = getattr(t, "closed_at", None) or getattr(t, "opened_at", None)
+            if not dt:
+                return "OFF_PEAK_CHOP"
+            h = dt.hour
+            if 13 <= h < 17:
+                return "LONDON_NY_OVERLAP"
+            elif 7 <= h < 9:
+                return "ASIA_LONDON_TRANSITION"
+            elif 17 <= h < 21:
+                return "NY_AFTERNOON_CLOSE"
+            else:
+                return "OFF_PEAK_CHOP"
+
+        total_cnt = len(trades)
+        bucketed: Dict[str, List[Trade]] = {k: [] for k in windows_def}
+        for t in trades:
+            w_key = detect_window(t)
+            bucketed[w_key].append(t)
+
+        results = {}
+        for k, b_trades in bucketed.items():
+            meta = windows_def[k]
+            cnt = len(b_trades)
+            if cnt == 0:
+                results[k] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                    "share_pct": 0.0,
+                }
+                continue
+
+            pnls = [float(t.net_pnl or 0.0) for t in b_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / cnt * 100.0, 1)
+            net_pnl = round(float(sum(pnls)), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            avg_pnl = round(net_pnl / cnt, 2)
+            share_pct = round(cnt / total_cnt * 100.0, 1)
+
+            results[k] = {
+                **meta,
+                "trades_count": cnt,
+                "win_trades": len(wins),
+                "loss_trades": len(losses),
+                "winrate": winrate,
+                "net_pnl": net_pnl,
+                "profit_factor": pf,
+                "avg_trade_pnl": avg_pnl,
+                "share_pct": share_pct,
+            }
+
+        active = [w for w in results.values() if w["trades_count"] > 0]
+        best_w = max(active, key=lambda x: x["net_pnl"])["key"] if active else None
+        worst_w = min(active, key=lambda x: x["net_pnl"])["key"] if active else None
+
+        london_ny_wr = results["LONDON_NY_OVERLAP"]["winrate"]
+        off_peak_wr = results["OFF_PEAK_CHOP"]["winrate"]
+        alpha_ratio = round(london_ny_wr / max(off_peak_wr, 1.0), 2) if results["LONDON_NY_OVERLAP"]["trades_count"] > 0 else 1.0
+
+        if best_w:
+            b_meta = results[best_w]
+            insight = f"Лучшее окно: {b_meta['name']} ({b_meta['time_span']}) -> Net PnL: ${b_meta['net_pnl']:+,.2f} (WR: {b_meta['winrate']}%)"
+        else:
+            insight = "Анализ окон ликвидности активен"
+
+        return {
+            "windows": results,
+            "best_window": best_w,
+            "worst_window": worst_w,
+            "overlap_alpha_ratio": alpha_ratio,
+            "overlap_insight": insight,
+            "total_trades": total_cnt,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

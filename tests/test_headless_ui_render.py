@@ -117,6 +117,11 @@ def test_dashboard_view_headless_render():
     assert comp_card is not None
     assert dash.compliance_routine_container is not None
 
+    # Verify Session overlap liquidity card renders cleanly
+    overlap_card = dash._build_session_overlap_card(trades=[])
+    assert overlap_card is not None
+    assert dash.session_overlap_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

@@ -960,6 +960,50 @@ def test_compliance_routine_matrix():
     assert len(mat["compliance_insight"]) > 10
 
 
+def test_session_overlap_matrix():
+    """Verify session overlap liquidity window classification, alpha ratios and PnL breakdown."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_session_overlap_matrix([])
+    assert set(empty_mat["windows"].keys()) == {"LONDON_NY_OVERLAP", "ASIA_LONDON_TRANSITION", "NY_AFTERNOON_CLOSE", "OFF_PEAK_CHOP"}
+    assert empty_mat["best_window"] is None
+    assert empty_mat["overlap_alpha_ratio"] == 1.0
+
+    # 2. Trades in distinct institutional liquidity windows
+    # 14:30 UTC -> LONDON_NY_OVERLAP (+400)
+    t_overlap = Trade(direction="LONG", entry_price=100.0, exit_price=140.0, volume=10.0, closed_at=datetime.datetime(2026, 3, 2, 14, 30))
+    # 08:00 UTC -> ASIA_LONDON_TRANSITION (+200)
+    t_trans = Trade(direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0, closed_at=datetime.datetime(2026, 3, 2, 8, 0))
+    # 18:30 UTC -> NY_AFTERNOON_CLOSE (+150)
+    t_ny = Trade(direction="LONG", entry_price=100.0, exit_price=115.0, volume=10.0, closed_at=datetime.datetime(2026, 3, 2, 18, 30))
+    # 02:00 UTC -> OFF_PEAK_CHOP (-100)
+    t_off = Trade(direction="LONG", entry_price=100.0, exit_price=90.0, volume=10.0, closed_at=datetime.datetime(2026, 3, 2, 2, 0))
+
+    trades = [t_overlap, t_trans, t_ny, t_off]
+    mat = AnalyticsService.calculate_session_overlap_matrix(trades)
+    w = mat["windows"]
+
+    assert mat["total_trades"] == 4
+    assert w["LONDON_NY_OVERLAP"]["trades_count"] == 1
+    assert w["LONDON_NY_OVERLAP"]["net_pnl"] == 400.0
+    assert w["LONDON_NY_OVERLAP"]["winrate"] == 100.0
+
+    assert w["ASIA_LONDON_TRANSITION"]["trades_count"] == 1
+    assert w["ASIA_LONDON_TRANSITION"]["net_pnl"] == 200.0
+
+    assert w["NY_AFTERNOON_CLOSE"]["trades_count"] == 1
+    assert w["NY_AFTERNOON_CLOSE"]["net_pnl"] == 150.0
+
+    assert w["OFF_PEAK_CHOP"]["trades_count"] == 1
+    assert w["OFF_PEAK_CHOP"]["net_pnl"] == -100.0
+    assert w["OFF_PEAK_CHOP"]["winrate"] == 0.0
+
+    assert mat["best_window"] == "LONDON_NY_OVERLAP"
+    assert mat["worst_window"] == "OFF_PEAK_CHOP"
+    assert mat["overlap_alpha_ratio"] > 1.0
+    assert len(mat["overlap_insight"]) > 10
+
+
+
 
 
 
