@@ -137,6 +137,7 @@ class DashboardView(ft.Container):
         self.prop_consistency_container = ft.Container()
         self.order_placement_container = ft.Container()
         self.factor_ic_container = ft.Container()
+        self.trade_management_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -322,6 +323,8 @@ class DashboardView(ft.Container):
                 self.order_placement_container,
                 ft.Container(height=4),
                 self.factor_ic_container,
+                ft.Container(height=4),
+                self.trade_management_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -4372,6 +4375,195 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_trade_management_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный аудит эффективности управления позицией (TraderSync Trade Management Audit).
+        """
+        matrix = AnalyticsService.calculate_trade_management_matrix(trades)
+        delta = matrix["management_alpha_delta"]
+        has_pos = matrix["has_positive_alpha"]
+        alpha_col = matrix["alpha_color"]
+        be_cnt = matrix["be_choke_count"]
+        be_cost = matrix["be_choke_opportunity_cost"]
+        optimal_style = matrix["optimal_archetype"]
+        insight = matrix["management_insight"]
+        archs = matrix["archetypes"]
+
+        sign = "+" if delta >= 0 else ""
+        header_badge = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.TRENDING_UP_ROUNDED if has_pos else ft.Icons.TRENDING_DOWN_ROUNDED,
+                        size=13,
+                        color=alpha_col,
+                    ),
+                    ft.Text(f"Альфа управления: {sign}${delta:,.2f}", size=10, weight=ft.FontWeight.BOLD, color=alpha_col, font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, alpha_col),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.35, alpha_col)),
+        )
+
+        sf_data = archs.get("SET_AND_FORGET", {"trades_count": 0, "net_pnl": 0.0, "winrate": 0.0})
+        scale_data = archs.get("SCALED_MANAGEMENT", {"trades_count": 0, "net_pnl": 0.0, "winrate": 0.0})
+
+        kpis = [
+            # 1. Management Alpha Delta
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Альфа / Драг управления", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text("ALPHA" if has_pos else "DRAG", size=9, weight=ft.FontWeight.BOLD, color=alpha_col, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, alpha_col),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{sign}${delta:,.2f}", size=18, weight=ft.FontWeight.BOLD, color=alpha_col, font_family=FONT_MONO),
+                        ft.Text("Разница против Set & Forget", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 2. Premature Breakeven Choke
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Удушение в Б/У (BE Choke)", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(f"{be_cnt} сделок", size=9, weight=ft.FontWeight.BOLD, color=LOSS if be_cost > 0 else PROFIT, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, LOSS if be_cost > 0 else PROFIT),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"-${be_cost:,.2f}" if be_cost > 0 else "$0.00", size=18, weight=ft.FontWeight.BOLD, color=LOSS if be_cost > 0 else PROFIT, font_family=FONT_MONO),
+                        ft.Text("Упущенный профит после раннего Б/У", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 3. Scaled & Partial Exits
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Частичные фиксации (Scale Out)", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(f"{scale_data['winrate']}% WR", size=9, weight=ft.FontWeight.BOLD, color=PROFIT if scale_data['winrate'] >= 50 else TEXT_MUTED, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, PROFIT if scale_data['winrate'] >= 50 else TEXT_MUTED),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{'+' if scale_data['net_pnl'] >= 0 else ''}${scale_data['net_pnl']:,.2f}", size=18, weight=ft.FontWeight.BOLD, color=PROFIT if scale_data['net_pnl'] >= 0 else LOSS, font_family=FONT_MONO),
+                        ft.Text(f"{scale_data['trades_count']} сделок с дроблением", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 4. Optimal Archetype
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Оптимальный стиль", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text("LEADER", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(optimal_style, size=13, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS),
+                        ft.Text(f"Set & Forget: ${sf_data['net_pnl']:,.2f} ({sf_data['trades_count']} сд.)", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+        ]
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.TUNE_ROUNDED, color="#7C5CFF", size=18),
+                                    ft.Text("Эффективность управления позицией", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Trade Management Audit)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_badge,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=kpis, spacing=10, run_spacing=10),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED if has_pos else ft.Icons.WARNING_ROUNDED, size=13, color=alpha_col),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, ft.Colors.with_opacity(0.35, alpha_col) if not has_pos else BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -5054,6 +5246,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Factor IC Card: {ex_ic}")
             self.factor_ic_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга предсказательной силы факторов: {ex_ic}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.22 Обновление эффективности управления позицией (Error Boundary)
+        try:
+            self.trade_management_container.content = self._build_trade_management_card(trades)
+        except Exception as ex_tm:
+            logging.exception(f"[DashboardView] Error rendering Trade Management Card: {ex_tm}")
+            self.trade_management_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга аудита управления: {ex_tm}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

@@ -3602,6 +3602,133 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_trade_management_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Аудит эффективности управления открытой позицией (TraderSync Trade Management Audit).
+        Сравнивает Set & Forget (вход и удержание строго до TP/SL) с активным управлением:
+        - Преждевременный перевод в безубыток (BE Choke): сделки, закрытые около нуля, но имевшие высокий MFE.
+        - Частичные выходы (Scaling Out / Scaling In): прибыльность поэтапной фиксации.
+        - Трейлинг-стоп (Trailing Stop): захват прибыли против отсечения долгосрочного тренда.
+        - Management Alpha / Drag: разница между фактическим PnL и гипотетическим Set & Forget.
+        """
+        if not trades:
+            return {
+                "management_alpha_delta": 0.0,
+                "has_positive_alpha": True,
+                "alpha_color": "#94A3B8",
+                "be_choke_count": 0,
+                "be_choke_opportunity_cost": 0.0,
+                "archetypes": {},
+                "optimal_archetype": "N/A",
+                "management_insight": "Нет данных по сделкам для анализа эффективности управления позицией",
+                "total_trades": 0,
+            }
+
+        archetype_map: Dict[str, List[Trade]] = {
+            "SET_AND_FORGET": [],
+            "BE_STOPOUT": [],
+            "SCALED_MANAGEMENT": [],
+            "TRAILING_STOP": [],
+        }
+
+        be_choke_count = 0
+        be_choke_opp_cost = 0.0
+        theoretical_sf_pnls = []
+
+        for t in trades:
+            pnl = float(t.net_pnl or 0.0)
+            mfe = float(getattr(t, "mfe", 0.0) or 0.0)
+            notes = str(getattr(t, "notes", "") or "").lower()
+            scales = getattr(t, "scales", None) or []
+
+            # Определение архетипа управления
+            if len(scales) > 0 or any(k in notes for k in ("scale", "частичн", "добор", "скинул часть")):
+                arch = "SCALED_MANAGEMENT"
+                theoretical_sf = pnl * 1.05  # Модель Set & Forget без дробления
+            elif abs(pnl) <= 15.0 and (mfe >= 40.0 or any(k in notes for k in ("бу", "безубыток", "be", "breakeven", "в безубыток"))):
+                arch = "BE_STOPOUT"
+                if mfe >= 40.0:
+                    be_choke_count += 1
+                    be_choke_opp_cost += (mfe - pnl)
+                    theoretical_sf = mfe * 0.75  # При Set & Forget забрал бы большую часть движения
+                else:
+                    theoretical_sf = pnl
+            elif any(k in notes for k in ("trail", "трал", "трейлинг", "подтянул стоп", "подтяжка")):
+                arch = "TRAILING_STOP"
+                theoretical_sf = mfe * 0.85 if mfe > pnl else pnl
+            else:
+                arch = "SET_AND_FORGET"
+                theoretical_sf = pnl
+
+            archetype_map[arch].append(t)
+            theoretical_sf_pnls.append(theoretical_sf)
+
+        actual_net_pnl = sum(float(t.net_pnl or 0.0) for t in trades)
+        theoretical_sf_total = sum(theoretical_sf_pnls)
+        alpha_delta = round(actual_net_pnl - theoretical_sf_total, 2)
+        has_pos_alpha = alpha_delta >= 0
+
+        # Сводка по архетипам
+        archetype_stats = {}
+        for arch_name, t_list in archetype_map.items():
+            cnt = len(t_list)
+            if cnt > 0:
+                pnls = [float(t.net_pnl or 0.0) for t in t_list]
+                wins = [p for p in pnls if p > 0]
+                losses = [p for p in pnls if p < 0]
+                gw = sum(wins)
+                gl = abs(sum(losses))
+                pf = round(gw / gl, 2) if gl > 0 else (99.9 if gw > 0 else 1.0)
+                wr = round(len(wins) / cnt * 100.0, 1)
+                net = round(sum(pnls), 2)
+            else:
+                wr, net, pf = 0.0, 0.0, 1.0
+
+            archetype_stats[arch_name] = {
+                "trades_count": cnt,
+                "winrate": wr,
+                "net_pnl": net,
+                "profit_factor": pf,
+            }
+
+        # Определение оптимального стиля
+        active_archetypes = [(k, v) for k, v in archetype_stats.items() if v["trades_count"] > 0]
+        if active_archetypes:
+            best_arch_key = max(active_archetypes, key=lambda x: x[1]["net_pnl"])[0]
+        else:
+            best_arch_key = "SET_AND_FORGET"
+
+        arch_names_ru = {
+            "SET_AND_FORGET": "Set & Forget (Без вмешательств)",
+            "BE_STOPOUT": "Перевод в безубыток (BE)",
+            "SCALED_MANAGEMENT": "Частичные фиксации (Scale Out)",
+            "TRAILING_STOP": "Трейлинг-стоп (Trailing)",
+        }
+        best_arch_label = arch_names_ru.get(best_arch_key, best_arch_key)
+
+        if has_pos_alpha:
+            alpha_color = "#10B981"
+            insight = f"Активное управление дает альфу +${alpha_delta:,.2f}. Лучший стиль: {best_arch_label}"
+        else:
+            alpha_color = "#EF4444"
+            if be_choke_count > 0:
+                insight = f"⚠️ Отрицательный драг управления: -${abs(alpha_delta):,.2f}. Из-за раннего перевода в Б/У упущено ${be_choke_opp_cost:,.2f} в {be_choke_count} сделках"
+            else:
+                insight = f"Ручное вмешательство ухудшает результат на -${abs(alpha_delta):,.2f}. Рекомендуется следовать жесткому Set & Forget"
+
+        return {
+            "management_alpha_delta": alpha_delta,
+            "has_positive_alpha": has_pos_alpha,
+            "alpha_color": alpha_color,
+            "be_choke_count": be_choke_count,
+            "be_choke_opportunity_cost": round(be_choke_opp_cost, 2),
+            "archetypes": archetype_stats,
+            "optimal_archetype": best_arch_label,
+            "management_insight": insight,
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

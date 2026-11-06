@@ -1227,6 +1227,34 @@ def test_factor_information_coefficient():
     assert len(mat["ic_insight"]) > 10
 
 
+def test_trade_management_matrix():
+    """Verify TraderSync trade management audit, BE Choke detection, and Set & Forget theoretical delta."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_trade_management_matrix([])
+    assert empty_mat["management_alpha_delta"] == 0.0
+    assert empty_mat["be_choke_count"] == 0
+    assert empty_mat["optimal_archetype"] == "N/A"
+
+    # 2. Trades with BE choke and scale-out
+    t_be = Trade(direction="LONG", entry_price=100.0, exit_price=100.2, volume=10.0, notes="перевел в безубыток")
+    t_be.mfe = 180.0
+    t_scale = Trade(direction="LONG", entry_price=100.0, exit_price=140.0, volume=10.0, notes="частичный сброс 50%")
+    t_sf = Trade(direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0)
+
+    trades = [t_be, t_scale, t_sf]
+    mat = AnalyticsService.calculate_trade_management_matrix(trades)
+
+    assert mat["total_trades"] == 3
+    assert mat["be_choke_count"] == 1
+    assert mat["be_choke_opportunity_cost"] > 100.0
+    assert "BE_STOPOUT" in mat["archetypes"]
+    assert mat["archetypes"]["BE_STOPOUT"]["trades_count"] == 1
+    assert mat["archetypes"]["SCALED_MANAGEMENT"]["trades_count"] == 1
+    assert mat["archetypes"]["SET_AND_FORGET"]["trades_count"] == 1
+    assert len(mat["management_insight"]) > 10
+
+
+
 
 
 

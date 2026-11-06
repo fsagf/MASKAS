@@ -152,6 +152,11 @@ def test_dashboard_view_headless_render():
     assert ic_card is not None
     assert dash.factor_ic_container is not None
 
+    # Verify Trade management audit card renders cleanly
+    mgmt_card = dash._build_trade_management_card(trades=[])
+    assert mgmt_card is not None
+    assert dash.trade_management_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 
