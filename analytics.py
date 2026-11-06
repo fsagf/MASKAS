@@ -1044,6 +1044,193 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_asset_allocation_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ распределения капитала по классам активов и концентрации риска (TraderVue / TradeZella).
+        Сегментирует сделки на Криптовалюты (Crypto), Форекс (Forex), Акции/Индексы (Equities/Indices)
+        и Сырьевые товары (Commodities). Выявляет риск овер-концентрации портфеля (>40% объема в одном активе).
+        """
+        classes_def = {
+            "CRYPTO": {
+                "key": "CRYPTO",
+                "name": "Криптовалюты",
+                "color": "#10B981",
+                "icon": "currency_bitcoin_rounded",
+            },
+            "FOREX": {
+                "key": "FOREX",
+                "name": "Форекс (FX)",
+                "color": "#6366F1",
+                "icon": "currency_exchange_rounded",
+            },
+            "EQUITIES": {
+                "key": "EQUITIES",
+                "name": "Акции & Индексы",
+                "color": "#7C5CFF",
+                "icon": "candlestick_chart_rounded",
+            },
+            "COMMODITIES": {
+                "key": "COMMODITIES",
+                "name": "Сырье & Металлы",
+                "color": "#F59E0B",
+                "icon": "diamond_rounded",
+            },
+        }
+
+        def detect_asset_class(ticker: str) -> str:
+            t = (ticker or "").upper().strip()
+            if any(c in t for c in ["XAU", "GOLD", "OIL", "USOIL", "WTI", "XAG", "SILVER", "BRENT"]):
+                return "COMMODITIES"
+            if "/" in t:
+                parts = t.split("/")
+                fx_currencies = {"USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD"}
+                if any(p in fx_currencies for p in parts):
+                    return "FOREX"
+            if any(t.endswith(s) for s in ["USDT", "BUSD", "USDC", "PERP"]) or any(t.startswith(s) for s in ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "NEAR", "LINK"]):
+                return "CRYPTO"
+            return "EQUITIES"
+
+        if not trades:
+            empty_classes = {}
+            for k, meta in classes_def.items():
+                empty_classes[k] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "volume_turnover": 0.0,
+                    "share_pct": 0.0,
+                }
+            return {
+                "asset_classes": empty_classes,
+                "top_symbols": [],
+                "concentration_warning": None,
+                "best_class": None,
+                "worst_class": None,
+                "total_volume": 0.0,
+                "total_trades": 0,
+            }
+
+        # Группировка по классам активов и символам
+        class_buckets: Dict[str, List[Trade]] = {k: [] for k in classes_def}
+        symbol_buckets: Dict[str, List[Trade]] = {}
+
+        for t in trades:
+            c_key = detect_asset_class(t.ticker)
+            class_buckets[c_key].append(t)
+            sym = (t.ticker or "UNKNOWN").upper().strip()
+            if sym not in symbol_buckets:
+                symbol_buckets[sym] = []
+            symbol_buckets[sym].append(t)
+
+        def calc_turnover(t_list: List[Trade]) -> float:
+            total = 0.0
+            for t in t_list:
+                vol = float(t.volume or 1.0)
+                px = float(t.entry_price or 1.0)
+                total += vol * px
+            return total
+
+        total_turnover = calc_turnover(trades)
+        if total_turnover <= 0.0:
+            total_turnover = float(len(trades))
+
+        class_results = {}
+        for c_key, c_trades in class_buckets.items():
+            meta = classes_def[c_key]
+            cnt = len(c_trades)
+            if cnt == 0:
+                class_results[c_key] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "volume_turnover": 0.0,
+                    "share_pct": 0.0,
+                }
+                continue
+
+            pnls = [float(t.net_pnl or 0.0) for t in c_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / cnt * 100, 1)
+            net_pnl = round(float(sum(pnls)), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            c_turnover = calc_turnover(c_trades)
+            share_pct = round((c_turnover / total_turnover) * 100, 1)
+
+            class_results[c_key] = {
+                **meta,
+                "trades_count": cnt,
+                "win_trades": len(wins),
+                "loss_trades": len(losses),
+                "winrate": winrate,
+                "net_pnl": net_pnl,
+                "profit_factor": pf,
+                "volume_turnover": round(c_turnover, 2),
+                "share_pct": share_pct,
+            }
+
+        # Анализ топ-символов
+        top_symbols = []
+        concentration_warning = None
+
+        for sym, sym_trades in symbol_buckets.items():
+            cnt = len(sym_trades)
+            pnls = [float(t.net_pnl or 0.0) for t in sym_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / cnt * 100, 1)
+            net_pnl = round(float(sum(pnls)), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            sym_turnover = calc_turnover(sym_trades)
+            share_pct = round((sym_turnover / total_turnover) * 100, 1)
+
+            if share_pct >= 40.0 and len(trades) >= 3:
+                concentration_warning = f"Овер-концентрация риска: на {sym} приходится {share_pct}% торгового оборота"
+
+            top_symbols.append({
+                "ticker": sym,
+                "asset_class": detect_asset_class(sym),
+                "trades_count": cnt,
+                "winrate": winrate,
+                "net_pnl": net_pnl,
+                "profit_factor": pf,
+                "volume_turnover": round(sym_turnover, 2),
+                "share_pct": share_pct,
+            })
+
+        # Сортируем топ-активы по обороту и количеству сделок
+        top_symbols.sort(key=lambda s: (s["share_pct"], s["trades_count"]), reverse=True)
+        top_symbols = top_symbols[:6]
+
+        active_classes = [c for c in class_results.values() if c["trades_count"] > 0]
+        best_class = max(active_classes, key=lambda x: x["net_pnl"])["key"] if active_classes else None
+        worst_class = min(active_classes, key=lambda x: x["net_pnl"])["key"] if active_classes else None
+
+        return {
+            "asset_classes": class_results,
+            "top_symbols": top_symbols,
+            "concentration_warning": concentration_warning,
+            "best_class": best_class,
+            "worst_class": worst_class,
+            "total_volume": round(total_turnover, 2),
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

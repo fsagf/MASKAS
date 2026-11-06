@@ -118,6 +118,7 @@ class DashboardView(ft.Container):
         self.session_matrix_container = ft.Container()
         self.strategy_leaderboard_container = ft.Container()
         self.duration_analysis_container = ft.Container()
+        self.asset_allocation_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -265,6 +266,8 @@ class DashboardView(ft.Container):
                 self.strategy_leaderboard_container,
                 ft.Container(height=4),
                 self.duration_analysis_container,
+                ft.Container(height=4),
+                self.asset_allocation_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -1059,6 +1062,207 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_asset_allocation_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный анализ распределения по классам активов и концентрации риска (Asset Class & Ticker Matrix).
+        """
+        matrix = AnalyticsService.calculate_asset_allocation_matrix(trades)
+        classes = matrix["asset_classes"]
+        top_symbols = matrix["top_symbols"]
+        warning = matrix["concentration_warning"]
+        best_c = matrix["best_class"]
+
+        class_cards = []
+        icon_map = {
+            "CRYPTO": ft.Icons.CURRENCY_BITCOIN_ROUNDED,
+            "FOREX": ft.Icons.CURRENCY_EXCHANGE_ROUNDED,
+            "EQUITIES": ft.Icons.CANDLESTICK_CHART_ROUNDED,
+            "COMMODITIES": ft.Icons.DIAMOND_ROUNDED,
+        }
+
+        for c_key in ["CRYPTO", "FOREX", "EQUITIES", "COMMODITIES"]:
+            c = classes[c_key]
+            is_best = (best_c == c_key and c["trades_count"] > 0)
+
+            pnl_val = c["net_pnl"]
+            pnl_color = PROFIT if pnl_val >= 0 else LOSS
+            pnl_sign = "+" if pnl_val >= 0 else ""
+            icon_ctrl = icon_map.get(c_key, ft.Icons.CATEGORY_ROUNDED)
+
+            leader_chip = ft.Container(
+                content=ft.Text("TOP ASSET", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                bgcolor=ft.Colors.with_opacity(0.15, ACCENT_PRIMARY),
+                padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.4, ACCENT_PRIMARY)),
+            ) if is_best else ft.Container()
+
+            card_widget = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        ft.Container(
+                                            content=ft.Icon(icon_ctrl, size=15, color=c["color"]),
+                                            padding=5,
+                                            bgcolor=ft.Colors.with_opacity(0.12, c["color"]),
+                                            border_radius=RADIUS_SM,
+                                        ),
+                                        ft.Column(
+                                            controls=[
+                                                ft.Text(c["name"], size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                                ft.Text(f"Доля: {c['share_pct']}% • {c['trades_count']} сделок", size=10, color=TEXT_MUTED, font_family=FONT_MONO),
+                                            ],
+                                            spacing=1,
+                                        ),
+                                    ],
+                                    spacing=8,
+                                ),
+                                leader_chip,
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=4),
+                        ft.ProgressBar(
+                            value=c["share_pct"] / 100.0,
+                            color=c["color"],
+                            bgcolor=SURFACE_2,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                        ft.Container(height=4),
+                        ft.Row(
+                            controls=[
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Net PnL", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{pnl_sign}${pnl_val:,.2f}", size=12, weight=ft.FontWeight.BOLD, color=pnl_color, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Winrate", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{c['winrate']}%", size=11, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Profit Factor", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{c['profit_factor']:.2f}", size=11, weight=ft.FontWeight.W_600, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.3, c["color"]) if is_best else BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 6, "lg": 3},
+            )
+            class_cards.append(card_widget)
+
+        symbol_chips = []
+        for s in top_symbols:
+            s_pnl = s["net_pnl"]
+            s_color = PROFIT if s_pnl >= 0 else LOSS
+            s_sign = "+" if s_pnl >= 0 else ""
+            chip = ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Text(s["ticker"], size=11, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                        ft.Container(
+                            content=ft.Text(f"{s['share_pct']}%", size=9, color=TEXT_MUTED, font_family=FONT_MONO),
+                            bgcolor=SURFACE_1,
+                            padding=ft.padding.symmetric(horizontal=4, vertical=1),
+                            border_radius=3,
+                        ),
+                        ft.Text(f"{s_sign}${s_pnl:,.0f}", size=10, weight=ft.FontWeight.W_600, color=s_color, font_family=FONT_MONO),
+                    ],
+                    spacing=6,
+                    tight=True,
+                ),
+                bgcolor=SURFACE_2,
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, BORDER_SUBTLE),
+            )
+            symbol_chips.append(chip)
+
+        header_right_controls = []
+        if warning:
+            header_right_controls.append(
+                ft.Container(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.WARNING_AMBER_ROUNDED, color=WARNING_TILT, size=14),
+                            ft.Text(warning, size=10, weight=ft.FontWeight.BOLD, color=WARNING_TILT, font_family=FONT_MONO),
+                        ],
+                        spacing=4,
+                        tight=True,
+                    ),
+                    bgcolor=ft.Colors.with_opacity(0.15, WARNING_TILT),
+                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                    border_radius=RADIUS_SM,
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.35, WARNING_TILT)),
+                )
+            )
+        else:
+            header_right_controls.append(
+                ft.Container(
+                    content=ft.Text(f"Оборот: ${matrix['total_volume']:,.0f} • Концентрация в норме", size=10, color=TEXT_MUTED, font_family=FONT_MONO),
+                    bgcolor=SURFACE_2,
+                    padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                    border_radius=RADIUS_SM,
+                    border=ft.border.all(1, BORDER_SUBTLE),
+                )
+            )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.PIE_CHART_ROUNDED, color=ACCENT_PRIMARY, size=18),
+                                    ft.Text("Классы активов и риск концентрации", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Asset Allocation Matrix)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            ft.Row(controls=header_right_controls, spacing=8),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=class_cards, spacing=10, run_spacing=10),
+                    ft.Container(height=4),
+                    ft.Row(
+                        controls=[
+                            ft.Text("Ключевые тикеры портфеля:", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                            ft.Row(controls=symbol_chips, spacing=8, wrap=True),
+                        ],
+                        spacing=8,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ) if symbol_chips else ft.Container(),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -1074,17 +1278,21 @@ class DashboardView(ft.Container):
         self.refresh()
 
         if self.page:
-            self.page.show_snack_bar(
-                ft.SnackBar(
+            try:
+                sb = ft.SnackBar(
                     content=ft.Text(
                         "Тильт-фильтр активирован: показан чистый edge стратегии без эмоциональных ошибок." if is_on
                         else "Тильт-фильтр отключен: отображаются все сделки портфеля.",
                         color=TEXT_PRIMARY,
-                        font_family=FONT_FAMILY,
                     ),
                     bgcolor=SURFACE_1,
+                    duration=3000,
                 )
-            )
+                self.page.overlay.append(sb)
+                sb.open = True
+                self.page.update()
+            except Exception:
+                pass
 
     def _open_ai_coach_modal(self) -> None:
         """Открывает модальное окно с квантовыми AI инсайтами трейдера (Wave AI Coach)."""
@@ -1547,6 +1755,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Duration Analysis: {ex_dur}")
             self.duration_analysis_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга анализа длительности: {ex_dur}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.3 Обновление матрицы распределения активов (Error Boundary)
+        try:
+            self.asset_allocation_container.content = self._build_asset_allocation_card(trades)
+        except Exception as ex_asset:
+            logging.exception(f"[DashboardView] Error rendering Asset Allocation: {ex_asset}")
+            self.asset_allocation_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга матрицы активов: {ex_asset}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

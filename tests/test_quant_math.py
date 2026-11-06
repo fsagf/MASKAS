@@ -510,6 +510,55 @@ def test_trade_duration_matrix():
     assert matrix["worst_duration"] == "DAY_TRADE"
 
 
+def test_asset_allocation_matrix():
+    """Verify asset class categorization, turnover volume weighting, and concentration risk triggers."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_asset_allocation_matrix([])
+    assert "asset_classes" in empty_mat
+    assert set(empty_mat["asset_classes"].keys()) == {"CRYPTO", "FOREX", "EQUITIES", "COMMODITIES"}
+    assert empty_mat["best_class"] is None
+    assert empty_mat["concentration_warning"] is None
+
+    # 2. Multi-asset portfolio
+    t_btc = Trade(ticker="BTCUSDT", direction="LONG", entry_price=100.0, exit_price=150.0, volume=10.0)    # +500, vol=1000
+    t_eth = Trade(ticker="ETHUSDT", direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0)    # +200, vol=1000
+    t_fx = Trade(ticker="EUR/USD", direction="LONG", entry_price=100.0, exit_price=110.0, volume=10.0)     # +100, vol=1000
+    t_stock = Trade(ticker="AAPL", direction="LONG", entry_price=100.0, exit_price=80.0, volume=10.0)      # -200, vol=1000
+    t_gold = Trade(ticker="XAU/USD", direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0)   # +300, vol=1000
+
+    trades = [t_btc, t_eth, t_fx, t_stock, t_gold]
+    matrix = AnalyticsService.calculate_asset_allocation_matrix(trades)
+    classes = matrix["asset_classes"]
+
+    # Verify classification
+    assert classes["CRYPTO"]["trades_count"] == 2
+    assert classes["CRYPTO"]["net_pnl"] == 700.0
+    assert classes["CRYPTO"]["winrate"] == 100.0
+
+    assert classes["FOREX"]["trades_count"] == 1
+    assert classes["FOREX"]["net_pnl"] == 100.0
+
+    assert classes["COMMODITIES"]["trades_count"] == 1
+    assert classes["COMMODITIES"]["net_pnl"] == 300.0
+
+    assert classes["EQUITIES"]["trades_count"] == 1
+    assert classes["EQUITIES"]["net_pnl"] == -200.0
+
+    assert matrix["best_class"] == "CRYPTO"
+    assert matrix["worst_class"] == "EQUITIES"
+    assert len(matrix["top_symbols"]) <= 6
+
+    # 3. High concentration risk trigger test (>40% volume)
+    t_heavy = Trade(ticker="SOLUSDT", direction="LONG", entry_price=100.0, exit_price=150.0, volume=80.0)  # vol=8000
+    t_light1 = Trade(ticker="EUR/USD", direction="LONG", entry_price=100.0, exit_price=110.0, volume=5.0)  # vol=500
+    t_light2 = Trade(ticker="AAPL", direction="LONG", entry_price=100.0, exit_price=105.0, volume=5.0)     # vol=500
+
+    conc_matrix = AnalyticsService.calculate_asset_allocation_matrix([t_heavy, t_light1, t_light2])
+    assert conc_matrix["concentration_warning"] is not None
+    assert "SOLUSDT" in conc_matrix["concentration_warning"]
+
+
+
 
 
 

@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 7 (Completed) -> Starting Iteration 8
+- **Iteration:** 8 (Completed) -> Starting Iteration 9
 - **Current Phase:** Phase 4: Full Regression & Close Loop
-- **Status:** All 38 Tests Green (100% Passing). Linear-style Command Palette with Dynamic Strategy Filters & Ticker Search Deployed.
+- **Status:** All 39 Tests Green (100% Passing). Asset Allocation Matrix & Concentration Risk Engine Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -64,16 +64,23 @@
   - Modernized `AppLayout` snackbar notifications to standard `page.overlay` pattern.
   - Added Linear-style footer shortcut chips (`↵ Select`, `ESC Close`, `Ctrl+K Shortcut`).
   - Added headless UI regression tests verifying category switching, search filtering, and Enter submission.
-- [x] **Total QA Suite (38 tests):**
+- [x] **Asset Class & Concentration Risk Matrix (Iteration 8):**
+  - Implemented `AnalyticsService.calculate_asset_allocation_matrix(trades)`: segments portfolio across `Crypto`, `Forex`, `Equities & Indices`, and `Commodities & Metals`.
+  - Computes Turnover Volume ($ and contracts), Net PnL, Winrate, Profit Factor, and Portfolio Volume Share (%) for each asset class.
+  - Identifies Top Traded Tickers with individual volume shares and Net PnL chips.
+  - Added Concentration Risk Warning trigger: warns when a single asset exceeds 40% of trading turnover.
+  - Created `_build_asset_allocation_card` in `ui/views/dashboard.py` with 4 asset class KPI cards, volume progress bars, risk badges, and top symbol pills.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (39 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 11 tests.
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 12 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including CommandBar Linear UX).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Asset Allocation card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 8+)
-- [ ] **TraderVue / TradeZella:** Asset Class & Symbol Concentration Risk Matrix (Crypto vs Forex vs Equities breakdown with volume, winrate, and drawdown exposure) (Iteration 8 Target).
-- [ ] **Edgewonk:** Emotional State & Psychology Matrix (tracking Discipline, Fear, Greed, FOMO impact on PnL).
+## Competitor Backlog (R&D for Iteration 9+)
+- [ ] **Edgewonk:** Emotional State & Psychological Biases Matrix (FOMO, Greed, Revenge, Impulsive Exit impact on Expectancy & PnL) (Iteration 9 Target).
+- [ ] **TraderSync:** Advanced Win/Loss Streak Probability Distribution & Drawdown Simulator.
