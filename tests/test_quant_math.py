@@ -1046,6 +1046,41 @@ def test_setup_grading_matrix():
     assert len(mat["setup_grading_insight"]) > 10
 
 
+def test_tag_attribution_matrix():
+    """Verify trade tag performance cloud, factor extraction from hashtags/notes, and factor attribution."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_tag_attribution_matrix([])
+    assert empty_mat["tags"] == []
+    assert empty_mat["top_profitable_tag"] is None
+    assert empty_mat["top_drag_tag"] is None
+    assert empty_mat["unique_tags_count"] == 0
+
+    # 2. Trades with strategy tags and hashtags
+    t1 = Trade(direction="LONG", entry_price=100.0, exit_price=150.0, volume=10.0, strategy_tag="Breakout", notes="#FVG пробой")
+    t2 = Trade(direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0, strategy_tag="Breakout", notes="#News")
+    t3 = Trade(direction="LONG", entry_price=100.0, exit_price=70.0, volume=10.0, strategy_tag="Scalp", notes="тильт вход #Chop")
+
+    trades = [t1, t2, t3]
+    mat = AnalyticsService.calculate_tag_attribution_matrix(trades)
+
+    assert mat["total_trades"] == 3
+    assert mat["unique_tags_count"] >= 3
+    assert mat["top_profitable_tag"] in ("Breakout", "FVG")
+    assert mat["top_drag_tag"] in ("Scalp", "Chop", "Тильт")
+
+    tags_dict = {item["tag"]: item for item in mat["tags"]}
+    assert "Breakout" in tags_dict
+    assert tags_dict["Breakout"]["net_pnl"] == 700.0
+    assert tags_dict["Breakout"]["winrate"] == 100.0
+    assert tags_dict["Breakout"]["category"] == "PROFIT_DRIVER"
+
+    assert "Scalp" in tags_dict
+    assert tags_dict["Scalp"]["net_pnl"] == -300.0
+    assert tags_dict["Scalp"]["category"] == "DRAWDOWN_LEAK"
+    assert len(mat["attribution_insight"]) > 5
+
+
+
 
 
 

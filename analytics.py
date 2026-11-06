@@ -2962,6 +2962,147 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_tag_attribution_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ атрибуции торговых тегов и факторов (Trade Tag Performance Cloud & Factor Attribution).
+        Извлекает стратегические теги, сетапы и хэштеги из описания сделок:
+        - PROFIT_DRIVER: Теги с высокой прибыльностью и винрейтом >= 60%
+        - STEADY_EDGE: Стабильные прибыльные сетапы с винрейтом >= 50%
+        - DRAWDOWN_LEAK: Теги с отрицательным математическим ожиданием (Утечки)
+        - NEUTRAL: Нейтральные или околонулевые теги
+        """
+        import re
+
+        if not trades:
+            return {
+                "tags": [],
+                "top_profitable_tag": None,
+                "top_drag_tag": None,
+                "most_frequent_tag": None,
+                "unique_tags_count": 0,
+                "attribution_insight": "Нет данных по тегам для анализа атрибуции",
+                "total_trades": 0,
+            }
+
+        def extract_tags(t: Trade) -> List[str]:
+            tags = set()
+            st = getattr(t, "strategy_tag", None)
+            if st and str(st).strip() and str(st).strip().lower() not in ("none", "default", "—"):
+                tags.add(str(st).strip())
+
+            notes = getattr(t, "notes", None) or ""
+            hashtags = re.findall(r"#([A-Za-z0-9_А-Яа-я]+)", notes)
+            for ht in hashtags:
+                if ht:
+                    tags.add(ht.strip())
+
+            if not tags:
+                lower_n = notes.lower()
+                for kw, label in [
+                    ("breakout", "Breakout"),
+                    ("пробой", "Breakout"),
+                    ("order block", "OrderBlock"),
+                    ("ордерблок", "OrderBlock"),
+                    ("pullback", "Pullback"),
+                    ("откат", "Pullback"),
+                    ("fvg", "FVG"),
+                    ("scalp", "Scalp"),
+                    ("скальп", "Scalp"),
+                    ("trend", "Trend"),
+                    ("тренд", "Trend"),
+                    ("fomo", "FOMO"),
+                    ("тильт", "Тильт"),
+                ]:
+                    if kw in lower_n:
+                        tags.add(label)
+
+            if not tags:
+                tags.add("General")
+
+            return sorted(list(tags))
+
+        tag_to_trades: Dict[str, List[Trade]] = {}
+        for t in trades:
+            t_tags = extract_tags(t)
+            for tag_name in t_tags:
+                if tag_name not in tag_to_trades:
+                    tag_to_trades[tag_name] = []
+                tag_to_trades[tag_name].append(t)
+
+        tag_results = []
+        total_cnt = len(trades)
+
+        for tag_name, t_list in tag_to_trades.items():
+            cnt = len(t_list)
+            pnls = [float(t.net_pnl or 0.0) for t in t_list]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / cnt * 100.0, 1)
+            net_pnl = round(sum(pnls), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            avg_pnl = round(net_pnl / cnt, 2)
+            share_pct = round(cnt / total_cnt * 100.0, 1)
+
+            if net_pnl > 0 and winrate >= 60.0:
+                cat = "PROFIT_DRIVER"
+                color = "#10B981"
+            elif net_pnl > 0 and winrate >= 50.0:
+                cat = "STEADY_EDGE"
+                color = "#38BDF8"
+            elif net_pnl < 0:
+                cat = "DRAWDOWN_LEAK"
+                color = "#EF4444"
+            else:
+                cat = "NEUTRAL"
+                color = "#F59E0B"
+
+            tag_results.append({
+                "tag": tag_name,
+                "category": cat,
+                "color": color,
+                "trades_count": cnt,
+                "win_trades": len(wins),
+                "loss_trades": len(losses),
+                "winrate": winrate,
+                "net_pnl": net_pnl,
+                "profit_factor": pf,
+                "avg_trade_pnl": avg_pnl,
+                "share_pct": share_pct,
+            })
+
+        # Сортировка: сначала драйверы прибыли, затем нейтральные, затем утечки
+        tag_results.sort(key=lambda x: x["net_pnl"], reverse=True)
+
+        profit_tags = [t for t in tag_results if t["net_pnl"] > 0]
+        drag_tags = [t for t in tag_results if t["net_pnl"] < 0]
+
+        top_prof = profit_tags[0] if profit_tags else None
+        top_drag = min(drag_tags, key=lambda x: x["net_pnl"]) if drag_tags else None
+        most_freq = max(tag_results, key=lambda x: x["trades_count"]) if tag_results else None
+
+        if top_prof and top_drag:
+            insight = f"Драйвер: #{top_prof['tag']} (+${top_prof['net_pnl']:,.2f}) • Утечка: #{top_drag['tag']} (-${abs(top_drag['net_pnl']):,.2f})"
+        elif top_prof:
+            insight = f"Лучший фактор: #{top_prof['tag']} (+${top_prof['net_pnl']:,.2f}, WR {top_prof['winrate']}%)"
+        elif top_drag:
+            insight = f"Главная утечка: #{top_drag['tag']} (-${abs(top_drag['net_pnl']):,.2f})"
+        else:
+            insight = f"Проанализировано {len(tag_results)} уникальных торговых тегов"
+
+        return {
+            "tags": tag_results,
+            "top_profitable_tag": top_prof["tag"] if top_prof else None,
+            "top_drag_tag": top_drag["tag"] if top_drag else None,
+            "most_frequent_tag": most_freq["tag"] if most_freq else None,
+            "unique_tags_count": len(tag_results),
+            "attribution_insight": insight,
+            "total_trades": total_cnt,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

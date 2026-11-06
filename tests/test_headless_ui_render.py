@@ -127,6 +127,11 @@ def test_dashboard_view_headless_render():
     assert grading_card is not None
     assert dash.setup_grading_container is not None
 
+    # Verify Tag attribution cloud card renders cleanly
+    tag_card = dash._build_tag_attribution_card(trades=[])
+    assert tag_card is not None
+    assert dash.tag_attribution_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

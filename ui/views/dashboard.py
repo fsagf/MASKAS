@@ -132,6 +132,7 @@ class DashboardView(ft.Container):
         self.compliance_routine_container = ft.Container()
         self.session_overlap_container = ft.Container()
         self.setup_grading_container = ft.Container()
+        self.tag_attribution_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -307,6 +308,8 @@ class DashboardView(ft.Container):
                 self.session_overlap_container,
                 ft.Container(height=4),
                 self.setup_grading_container,
+                ft.Container(height=4),
+                self.tag_attribution_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -3477,6 +3480,193 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_tag_attribution_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный анализ атрибуции торговых тегов и факторов (Trade Tag Performance Cloud & Factor Attribution).
+        """
+        matrix = AnalyticsService.calculate_tag_attribution_matrix(trades)
+        tag_list = matrix["tags"]
+        top_prof = matrix["top_profitable_tag"]
+        top_drag = matrix["top_drag_tag"]
+        most_freq = matrix["most_frequent_tag"]
+        unique_cnt = matrix["unique_tags_count"]
+        insight = matrix["attribution_insight"]
+
+        summary_chips = [
+            ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(ft.Icons.TRENDING_UP_ROUNDED, size=13, color=PROFIT),
+                        ft.Text(f"Драйвер: #{top_prof}" if top_prof else "Драйвер: —", size=10, weight=ft.FontWeight.BOLD, color=PROFIT, font_family=FONT_MONO),
+                    ],
+                    spacing=4,
+                    tight=True,
+                ),
+                bgcolor=ft.Colors.with_opacity(0.12, PROFIT),
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.3, PROFIT)),
+            ),
+            ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(ft.Icons.TRENDING_DOWN_ROUNDED, size=13, color=LOSS),
+                        ft.Text(f"Утечка: #{top_drag}" if top_drag else "Утечка: —", size=10, weight=ft.FontWeight.BOLD, color=LOSS, font_family=FONT_MONO),
+                    ],
+                    spacing=4,
+                    tight=True,
+                ),
+                bgcolor=ft.Colors.with_opacity(0.12, LOSS),
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.3, LOSS)),
+            ),
+            ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Icon(ft.Icons.TAG_ROUNDED, size=13, color=ACCENT_PRIMARY),
+                        ft.Text(f"Факторов: {unique_cnt}", size=10, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                    ],
+                    spacing=4,
+                    tight=True,
+                ),
+                bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.3, ACCENT_PRIMARY)),
+            ),
+        ]
+
+        tag_cards = []
+        for item in tag_list[:8]:  # Топ-8 ключевых факторов
+            t_name = item["tag"]
+            t_color = item["color"]
+            pnl_val = item["net_pnl"]
+            pnl_sign = "+" if pnl_val >= 0 else ""
+            pnl_color = PROFIT if pnl_val >= 0 else LOSS
+
+            card_w = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        ft.Container(
+                                            content=ft.Icon(ft.Icons.LABEL_ROUNDED, size=13, color=t_color),
+                                            padding=4,
+                                            bgcolor=ft.Colors.with_opacity(0.12, t_color),
+                                            border_radius=RADIUS_SM,
+                                        ),
+                                        ft.Text(f"#{t_name}", size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=6,
+                                ),
+                                ft.Container(
+                                    content=ft.Text(f"{item['share_pct']}% сделок", size=9, color=TEXT_MUTED, font_family=FONT_MONO),
+                                    bgcolor=SURFACE_1,
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=3),
+                        ft.ProgressBar(
+                            value=item["winrate"] / 100.0 if item["trades_count"] > 0 else 0.0,
+                            color=t_color,
+                            bgcolor=SURFACE_1,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                        ft.Container(height=3),
+                        ft.Row(
+                            controls=[
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Net PnL", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{pnl_sign}${pnl_val:,.2f}", size=12, weight=ft.FontWeight.BOLD, color=pnl_color, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Winrate", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{item['winrate']}% ({item['trades_count']})", size=11, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Profit Factor", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{item['profit_factor']:.2f}", size=11, weight=ft.FontWeight.W_600, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                    ],
+                    spacing=2,
+                ),
+                bgcolor=SURFACE_2,
+                padding=10,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.35, t_color) if item["category"] in ("PROFIT_DRIVER", "DRAWDOWN_LEAK") else BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            )
+            tag_cards.append(card_w)
+
+        if not tag_cards:
+            tag_cards.append(
+                ft.Container(
+                    content=ft.Text("Нет размеченных сделок или хэштегов в заметках для анализа атрибуции.", size=11, color=TEXT_MUTED),
+                    padding=10,
+                    col=12,
+                )
+            )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.LOCAL_OFFER_ROUNDED, color="#EC4899", size=18),
+                                    ft.Text("Атрибуция тегов и факторов сетапов", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Tag Performance Cloud)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            ft.Row(controls=summary_chips, spacing=6),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=tag_cards, spacing=10, run_spacing=10),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.INSIGHTS_ROUNDED, size=13, color=TEXT_MUTED),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -4109,6 +4299,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Setup Grading Matrix: {ex_sg}")
             self.setup_grading_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга градации сетапов: {ex_sg}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.17 Обновление атрибуции торговых тегов и факторов (Error Boundary)
+        try:
+            self.tag_attribution_container.content = self._build_tag_attribution_card(trades)
+        except Exception as ex_tag:
+            logging.exception(f"[DashboardView] Error rendering Tag Attribution Matrix: {ex_tag}")
+            self.tag_attribution_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга атрибуции тегов: {ex_tag}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

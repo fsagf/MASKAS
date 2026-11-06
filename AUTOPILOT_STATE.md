@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 21 (Completed) -> Starting Iteration 22
+- **Iteration:** 22 (Completed) -> Starting Iteration 23
 - **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 52 Tests Green (100% Passing). Playbook Setup Quality Grading Matrix Deployed.
+- **Status:** All 53 Tests Green (100% Passing). Trade Tag Performance Cloud & Factor Attribution Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -149,16 +149,24 @@
   - Measures A/A+ Discipline Ratio (%) and quantifies C-Tier Dollar Drag ($ lost on low-conviction noise trades).
   - Created `_build_setup_grading_card` in `ui/views/dashboard.py` with 4 responsive tier cards, progress bars, PRIME TIER badge, and setup discipline header chip.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (52 tests):**
+- [x] **Trade Tag Performance Cloud & Factor Attribution Engine (Iteration 22):**
+  - Implemented `AnalyticsService.calculate_tag_attribution_matrix(trades)`: parses strategy tags, hashtags (`#FVG`, `#News`), and setup keywords from trade notes.
+  - Categorizes tags into 4 behavioral archetypes: `PROFIT_DRIVER` (Winrate >= 60%, Net PnL > 0), `STEADY_EDGE` (Winrate >= 50%, Net PnL > 0), `DRAWDOWN_LEAK` (Net PnL < 0), and `NEUTRAL`.
+  - Computes Winrate %, Net PnL, Profit Factor, Average Trade PnL, and Volume Share (%) for each tag.
+  - Automatically isolates the top profit driver factor and the biggest dollar leakage factor.
+  - Created `_build_tag_attribution_card` in `ui/views/dashboard.py` featuring responsive factor cards with winrate progress bars, driver/leak summary chips, and actionable factor attribution insight bar.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (53 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 25 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 26 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix, Tag Attribution Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Setup Grading Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Tag Attribution Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 22+)
-- [ ] **TradeZella:** Interactive Trade Tag Word Cloud & Setup PnL Treemap Engine.
+## Competitor Backlog (R&D for Iteration 23+)
 - [ ] **TraderSync:** Rolling 30-Day Sharpe & Winrate Momentum Engine (Dynamic Edge Decay Detector).
+- [ ] **FTMO / TradeZella:** Consistency Rule & Prop Firm Challenge Readiness Radar.
+- [ ] **Edgewonk:** Optimal Stop Loss & Profit Target Placement Efficiency Curve.
