@@ -3103,6 +3103,131 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_rolling_edge_matrix(cls, trades: List[Trade], window_days: int = 30) -> Dict[str, Any]:
+        """
+        Динамический аудит устойчивости преимущества и детектор затухания альфы (Rolling Edge Decay Engine).
+        Сравнивает текущее 30-дневное окно с предшествующим 30-дневным окном:
+        - Rolling Sharpe Ratio (динамика риск-доходности)
+        - Rolling Winrate % (стабильность математического ожидания)
+        - Net PnL Momentum
+        - Индикатор затухания преимущества (Edge Decay Alert) для своевременной защиты депозита.
+        """
+        if not trades:
+            return {
+                "current_window": {"trades_count": 0, "winrate": 0.0, "net_pnl": 0.0, "sharpe": 0.0, "profit_factor": 1.0},
+                "prior_window": {"trades_count": 0, "winrate": 0.0, "net_pnl": 0.0, "sharpe": 0.0, "profit_factor": 1.0},
+                "sharpe_delta": 0.0,
+                "winrate_delta": 0.0,
+                "pnl_delta": 0.0,
+                "edge_momentum": "INSUFFICIENT_DATA",
+                "decay_alert": False,
+                "momentum_color": "#94A3B8",
+                "edge_insight": "Нет данных по сделкам для анализа динамики преимущества",
+                "window_days": window_days,
+                "total_trades": 0,
+            }
+
+        # Извлечение дат закрытия сделок
+        dated_trades = []
+        for t in trades:
+            dt = t.closed_at or t.created_at
+            if isinstance(dt, str):
+                try:
+                    dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+                except Exception:
+                    dt = None
+            if not dt:
+                dt = datetime.now()
+            # Обеспечиваем tz-naive для надежного сравнения
+            if getattr(dt, "tzinfo", None) is not None:
+                dt = dt.replace(tzinfo=None)
+            dated_trades.append((t, dt))
+
+        dated_trades.sort(key=lambda x: x[1])
+
+        latest_dt = dated_trades[-1][1]
+        curr_cutoff = latest_dt - timedelta(days=window_days)
+        prior_cutoff = latest_dt - timedelta(days=window_days * 2)
+
+        curr_t = [t for t, dt in dated_trades if dt >= curr_cutoff]
+        prior_t = [t for t, dt in dated_trades if prior_cutoff <= dt < curr_cutoff]
+
+        # Если предшествующее окно пустое (например, вся история короткая), разбиваем сплитом пополам
+        if not prior_t and len(dated_trades) >= 2:
+            half = len(dated_trades) // 2
+            prior_t = [t for t, _ in dated_trades[:half]]
+            curr_t = [t for t, _ in dated_trades[half:]]
+        elif not prior_t:
+            prior_t = curr_t[:]
+
+        def evaluate_window(t_list: List[Trade]) -> Dict[str, Any]:
+            if not t_list:
+                return {"trades_count": 0, "winrate": 0.0, "net_pnl": 0.0, "sharpe": 0.0, "profit_factor": 1.0}
+            cnt = len(t_list)
+            pnls = [float(t.net_pnl or 0.0) for t in t_list]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            wr = round(len(wins) / cnt * 100.0, 1)
+            net = round(sum(pnls), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+
+            # Расчет Sharpe на выборке сделок
+            if cnt > 1 and np.std(pnls) > 1e-6:
+                sharpe = float(np.mean(pnls) / np.std(pnls) * np.sqrt(min(cnt, 252)))
+                sharpe = round(sharpe, 2)
+            else:
+                sharpe = 0.0
+
+            return {
+                "trades_count": cnt,
+                "winrate": wr,
+                "net_pnl": net,
+                "sharpe": sharpe,
+                "profit_factor": pf,
+            }
+
+        curr_stats = evaluate_window(curr_t)
+        prior_stats = evaluate_window(prior_t)
+
+        sharpe_delta = round(curr_stats["sharpe"] - prior_stats["sharpe"], 2)
+        wr_delta = round(curr_stats["winrate"] - prior_stats["winrate"], 1)
+        pnl_delta = round(curr_stats["net_pnl"] - prior_stats["net_pnl"], 2)
+
+        # Классификация динамики преимущества
+        if (sharpe_delta >= 0.2 or wr_delta >= 5.0) and curr_stats["net_pnl"] > 0:
+            momentum = "EXPANDING_EDGE"
+            mom_color = "#10B981"
+            decay_alert = False
+            insight = f"Преимущество расширяется: Sharpe {curr_stats['sharpe']} (+{sharpe_delta:+}), Winrate {curr_stats['winrate']}% ({wr_delta:+}%)"
+        elif sharpe_delta <= -0.3 or wr_delta <= -10.0 or (curr_stats["net_pnl"] < 0 and prior_stats["net_pnl"] > 0):
+            momentum = "DECAYING_EDGE"
+            mom_color = "#EF4444"
+            decay_alert = True
+            insight = f"⚠️ Внимание: Зафиксировано затухание преимущества! Winrate упал на {abs(wr_delta):.1f}%, Sharpe: {curr_stats['sharpe']} ({sharpe_delta:+}). Рекомендуется снизить риск"
+        else:
+            momentum = "STABLE_EDGE"
+            mom_color = "#38BDF8"
+            decay_alert = False
+            insight = f"Преимущество стабильно: Sharpe {curr_stats['sharpe']}, Winrate {curr_stats['winrate']}%, динамика в пределах рыночной нормы"
+
+        return {
+            "current_window": curr_stats,
+            "prior_window": prior_stats,
+            "sharpe_delta": sharpe_delta,
+            "winrate_delta": wr_delta,
+            "pnl_delta": pnl_delta,
+            "edge_momentum": momentum,
+            "decay_alert": decay_alert,
+            "momentum_color": mom_color,
+            "edge_insight": insight,
+            "window_days": window_days,
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 22 (Completed) -> Starting Iteration 23
+- **Iteration:** 23 (Completed) -> Starting Iteration 24
 - **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 53 Tests Green (100% Passing). Trade Tag Performance Cloud & Factor Attribution Deployed.
+- **Status:** All 54 Tests Green (100% Passing). Rolling 30D Edge Momentum & Decay Engine Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -156,17 +156,24 @@
   - Automatically isolates the top profit driver factor and the biggest dollar leakage factor.
   - Created `_build_tag_attribution_card` in `ui/views/dashboard.py` featuring responsive factor cards with winrate progress bars, driver/leak summary chips, and actionable factor attribution insight bar.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (53 tests):**
+- [x] **Rolling 30-Day Sharpe & Winrate Momentum Engine (Iteration 23):**
+  - Implemented `AnalyticsService.calculate_rolling_edge_matrix(trades, window_days=30)`: sliding-window comparative engine comparing the last 30 days against the prior 30-day baseline.
+  - Computes Rolling Sharpe Ratio, Rolling Winrate %, Rolling Net PnL, Profit Factor, and Trade Velocity.
+  - Calculates dynamic delta shifts (`Δ Sharpe`, `Δ Winrate %`, `Δ Net PnL`).
+  - Categorizes edge health: `EXPANDING_EDGE` (Sharpe expansion & positive WR momentum), `STABLE_EDGE`, and `DECAYING_EDGE` (warning trigger with proactive risk reduction advice).
+  - Created `_build_rolling_edge_card` in `ui/views/dashboard.py` featuring 4 responsive KPI cards, dynamic delta badges, rolling winrate progress bar, and decay alert insight bar.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (54 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 26 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix, Tag Attribution Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 27 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix, Tag Attribution Matrix, Rolling Edge Decay Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Tag Attribution Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Rolling Edge Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 23+)
-- [ ] **TraderSync:** Rolling 30-Day Sharpe & Winrate Momentum Engine (Dynamic Edge Decay Detector).
+## Competitor Backlog (R&D for Iteration 24+)
 - [ ] **FTMO / TradeZella:** Consistency Rule & Prop Firm Challenge Readiness Radar.
 - [ ] **Edgewonk:** Optimal Stop Loss & Profit Target Placement Efficiency Curve.
+- [ ] **QuantConnect:** Alpha Factor Information Coefficient (IC) & Predictive Decay Matrix.

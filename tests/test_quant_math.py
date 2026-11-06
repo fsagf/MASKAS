@@ -1080,6 +1080,56 @@ def test_tag_attribution_matrix():
     assert len(mat["attribution_insight"]) > 5
 
 
+def test_rolling_edge_matrix():
+    """Verify rolling 30-day Sharpe, winrate momentum, and edge decay detection."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_rolling_edge_matrix([])
+    assert empty_mat["edge_momentum"] == "INSUFFICIENT_DATA"
+    assert empty_mat["decay_alert"] is False
+    assert empty_mat["current_window"]["trades_count"] == 0
+
+    # 2. Expanding edge: Prior period is break-even/slight, current period is highly profitable
+    now = datetime.datetime.now()
+    t_old1 = Trade(direction="LONG", entry_price=100.0, exit_price=110.0, volume=10.0, closed_at=now - datetime.timedelta(days=45)) # +100
+    t_old2 = Trade(direction="LONG", entry_price=100.0, exit_price=90.0, volume=10.0, closed_at=now - datetime.timedelta(days=40))  # -100
+
+    t_new1 = Trade(direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0, closed_at=now - datetime.timedelta(days=10)) # +300
+    t_new2 = Trade(direction="LONG", entry_price=100.0, exit_price=125.0, volume=10.0, closed_at=now - datetime.timedelta(days=5))  # +250
+    t_new3 = Trade(direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0, closed_at=now - datetime.timedelta(days=2))  # +200
+
+    trades_expanding = [t_old1, t_old2, t_new1, t_new2, t_new3]
+    mat_exp = AnalyticsService.calculate_rolling_edge_matrix(trades_expanding, window_days=30)
+
+    assert mat_exp["current_window"]["trades_count"] == 3
+    assert mat_exp["current_window"]["winrate"] == 100.0
+    assert mat_exp["current_window"]["net_pnl"] == 750.0
+    assert mat_exp["prior_window"]["trades_count"] == 2
+    assert mat_exp["prior_window"]["winrate"] == 50.0
+    assert mat_exp["prior_window"]["net_pnl"] == 0.0
+    assert mat_exp["winrate_delta"] == 50.0
+    assert mat_exp["edge_momentum"] == "EXPANDING_EDGE"
+    assert mat_exp["decay_alert"] is False
+
+    # 3. Decaying edge: Prior period profitable, current period experiencing sharp losses
+    t_decay1 = Trade(direction="LONG", entry_price=100.0, exit_price=70.0, volume=10.0, closed_at=now - datetime.timedelta(days=8)) # -300
+    t_decay2 = Trade(direction="LONG", entry_price=100.0, exit_price=60.0, volume=10.0, closed_at=now - datetime.timedelta(days=3)) # -400
+
+    trades_decaying = [t_new1, t_new2, t_decay1, t_decay2]
+    # Emulate by setting old trades as profitable, recent trades as decaying
+    t_old_win1 = Trade(direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0, closed_at=now - datetime.timedelta(days=40)) # +300
+    t_old_win2 = Trade(direction="LONG", entry_price=100.0, exit_price=125.0, volume=10.0, closed_at=now - datetime.timedelta(days=35)) # +250
+    trades_decay = [t_old_win1, t_old_win2, t_decay1, t_decay2]
+
+    mat_dec = AnalyticsService.calculate_rolling_edge_matrix(trades_decay, window_days=30)
+    assert mat_dec["current_window"]["net_pnl"] == -700.0
+    assert mat_dec["current_window"]["winrate"] == 0.0
+    assert mat_dec["prior_window"]["net_pnl"] == 550.0
+    assert mat_dec["edge_momentum"] == "DECAYING_EDGE"
+    assert mat_dec["decay_alert"] is True
+    assert "Внимание" in mat_dec["edge_insight"]
+
+
+
 
 
 

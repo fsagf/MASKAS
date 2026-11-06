@@ -132,6 +132,11 @@ def test_dashboard_view_headless_render():
     assert tag_card is not None
     assert dash.tag_attribution_container is not None
 
+    # Verify Rolling edge momentum card renders cleanly
+    rolling_card = dash._build_rolling_edge_card(trades=[])
+    assert rolling_card is not None
+    assert dash.rolling_edge_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

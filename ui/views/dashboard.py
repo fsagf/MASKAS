@@ -133,6 +133,7 @@ class DashboardView(ft.Container):
         self.session_overlap_container = ft.Container()
         self.setup_grading_container = ft.Container()
         self.tag_attribution_container = ft.Container()
+        self.rolling_edge_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -310,6 +311,8 @@ class DashboardView(ft.Container):
                 self.setup_grading_container,
                 ft.Container(height=4),
                 self.tag_attribution_container,
+                ft.Container(height=4),
+                self.rolling_edge_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -3667,6 +3670,199 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_rolling_edge_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный аудит устойчивости преимущества и детектор затухания альфы (Rolling 30D Edge Momentum).
+        """
+        matrix = AnalyticsService.calculate_rolling_edge_matrix(trades, window_days=30)
+        curr = matrix["current_window"]
+        prior = matrix["prior_window"]
+        mom = matrix["edge_momentum"]
+        mom_color = matrix["momentum_color"]
+        decay_alert = matrix["decay_alert"]
+        insight = matrix["edge_insight"]
+
+        mom_labels = {
+            "EXPANDING_EDGE": "РАСШИРЕНИЕ АЛЬФЫ (EXPANDING)",
+            "STABLE_EDGE": "СТАБИЛЬНОЕ ПРЕИМУЩЕСТВО",
+            "DECAYING_EDGE": "ЗАТУХАНИЕ ПРЕИМУЩЕСТВА (DECAY)",
+            "INSUFFICIENT_DATA": "МАЛО ДАННЫХ",
+        }
+        status_label = mom_labels.get(mom, mom)
+
+        header_badge = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.WARNING_AMBER_ROUNDED if decay_alert else (ft.Icons.TRENDING_UP_ROUNDED if mom == "EXPANDING_EDGE" else ft.Icons.CHECK_CIRCLE_ROUNDED),
+                        size=13,
+                        color=mom_color,
+                    ),
+                    ft.Text(status_label, size=10, weight=ft.FontWeight.BOLD, color=mom_color, font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, mom_color),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.35, mom_color)),
+        )
+
+        def make_delta_badge(delta: float, is_pct: bool = False, is_pnl: bool = False) -> ft.Container:
+            col = PROFIT if delta > 0 else (LOSS if delta < 0 else TEXT_MUTED)
+            sign = "+" if delta > 0 else ""
+            fmt = f"{sign}${delta:,.2f}" if is_pnl else (f"{sign}{delta:.1f}%" if is_pct else f"{sign}{delta:+.2f}")
+            return ft.Container(
+                content=ft.Text(f"Δ {fmt}", size=9, weight=ft.FontWeight.BOLD, color=col, font_family=FONT_MONO),
+                bgcolor=ft.Colors.with_opacity(0.12, col),
+                padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                border_radius=RADIUS_SM,
+            )
+
+        kpis = [
+            # 1. Rolling Sharpe
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Rolling 30D Sharpe", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                make_delta_badge(matrix["sharpe_delta"]),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{curr['sharpe']:.2f}", size=18, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                        ft.Text(f"Базовый период: {prior['sharpe']:.2f}", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 2. Rolling Winrate
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Rolling 30D Winrate", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                make_delta_badge(matrix["winrate_delta"], is_pct=True),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{curr['winrate']}%", size=18, weight=ft.FontWeight.BOLD, color=PROFIT if curr['winrate'] >= 50.0 else LOSS, font_family=FONT_MONO),
+                        ft.ProgressBar(
+                            value=curr["winrate"] / 100.0,
+                            color=PROFIT if curr['winrate'] >= 50.0 else LOSS,
+                            bgcolor=SURFACE_1,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 3. Rolling Net PnL
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Rolling 30D Net PnL", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                make_delta_badge(matrix["pnl_delta"], is_pnl=True),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{'+' if curr['net_pnl'] >= 0 else ''}${curr['net_pnl']:,.2f}", size=18, weight=ft.FontWeight.BOLD, color=PROFIT if curr['net_pnl'] >= 0 else LOSS, font_family=FONT_MONO),
+                        ft.Text(f"Пред. 30 дней: ${prior['net_pnl']:,.2f}", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 4. Activity & Profit Factor
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Сделок за 30 дней", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(f"PF: {curr['profit_factor']:.2f}", size=9, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                                    bgcolor=SURFACE_1,
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{curr['trades_count']} сделок", size=18, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                        ft.Text(f"Базовый период: {prior['trades_count']} сделок", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+        ]
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.TIMELINE_ROUNDED, color="#38BDF8", size=18),
+                                    ft.Text("Динамика и устойчивость преимущества", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Rolling 30D Edge Momentum)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_badge,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=kpis, spacing=10, run_spacing=10),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED if not decay_alert else ft.Icons.WARNING_ROUNDED, size=13, color=mom_color),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, ft.Colors.with_opacity(0.35, mom_color) if decay_alert else BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -4309,6 +4505,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Tag Attribution Matrix: {ex_tag}")
             self.tag_attribution_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга атрибуции тегов: {ex_tag}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.18 Обновление динамики и затухания преимущества (Error Boundary)
+        try:
+            self.rolling_edge_container.content = self._build_rolling_edge_card(trades)
+        except Exception as ex_roll:
+            logging.exception(f"[DashboardView] Error rendering Rolling Edge Matrix: {ex_roll}")
+            self.rolling_edge_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга Rolling Edge матрицы: {ex_roll}", color=ft.Colors.ERROR),
                 padding=12,
             )
 
