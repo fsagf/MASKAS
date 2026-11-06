@@ -616,9 +616,11 @@ class DashboardView(ft.Container):
                     # 4. Полноразмерный график веера вероятностей
                     cone_chart,
 
-                    # 5. Описание метода бутстрэпа
+                    # 5. Описание метода бутстрэпа и Kelly-рекомендация
                     ft.Text(
-                        "Векторный бутстрэп 10 000 траекторий депозита • 95% доверительный интервал",
+                        f"Бутстрэп 10 000 траекторий • Риск по Келли (Half-Kelly): {metrics.half_kelly_pct:.1f}% • Серия: {metrics.current_streak:+d}"
+                        if metrics and metrics.half_kelly_pct > 0
+                        else "Векторный бутстрэп 10 000 траекторий депозита • 95% доверительный интервал",
                         size=10,
                         color=TEXT_MUTED,
                         font_family=FONT_FAMILY,
@@ -1080,7 +1082,11 @@ class DashboardView(ft.Container):
                     col={"sm": 6, "md": 4, "lg": 1.7},
                 ),
                 ft.Container(
-                    self._build_metric_card("Сделок", str(metrics.total_trades), subtitle=f"Ср: {metrics.avg_trade_pnl:+.2f}$"),
+                    self._build_metric_card(
+                        "Сделок",
+                        str(metrics.total_trades),
+                        subtitle=f"Серия: {metrics.current_streak:+d} • Ср: {metrics.avg_trade_pnl:+.1f}$" if metrics.total_trades > 0 else "Ср: 0.00$",
+                    ),
                     col={"sm": 6, "md": 4, "lg": 1.4},
                 ),
                 ft.Container(

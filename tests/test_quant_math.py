@@ -377,4 +377,42 @@ def test_time_heatmap_matrix():
     assert hm["best_hour"]["hour"] == 14
 
 
+def test_kelly_criterion_and_streaks():
+    """Verify Kelly Criterion position sizing and consecutive win/loss streaks calculation."""
+    # 1. Empty trades
+    empty_kelly = AnalyticsService.calculate_kelly_criterion([])
+    assert empty_kelly["kelly_fraction_pct"] == 0.0
+    assert empty_kelly["is_edge_positive"] is False
+
+    empty_streaks = AnalyticsService.calculate_streaks([])
+    assert empty_streaks["max_win_streak"] == 0
+    assert empty_streaks["current_streak"] == 0
+
+    # 2. Sequence of trades: Win, Win, Win, Loss, Loss, Win
+    trades = [
+        Trade(direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0, closed_at=datetime.datetime(2026, 3, 1, 10, 0)),   # +200
+        Trade(direction="LONG", entry_price=100.0, exit_price=115.0, volume=10.0, closed_at=datetime.datetime(2026, 3, 1, 11, 0)),   # +150
+        Trade(direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0, closed_at=datetime.datetime(2026, 3, 1, 12, 0)),   # +300
+        Trade(direction="LONG", entry_price=100.0, exit_price=90.0, volume=10.0, closed_at=datetime.datetime(2026, 3, 1, 13, 0)),    # -100
+        Trade(direction="LONG", entry_price=100.0, exit_price=88.0, volume=10.0, closed_at=datetime.datetime(2026, 3, 1, 14, 0)),    # -120
+        Trade(direction="LONG", entry_price=100.0, exit_price=118.0, volume=10.0, closed_at=datetime.datetime(2026, 3, 1, 15, 0)),   # +180
+    ]
+
+    metrics = AnalyticsService.calculate_metrics(trades)
+    assert metrics.kelly_fraction_pct > 0.0
+    assert metrics.half_kelly_pct > 0.0
+    assert metrics.half_kelly_pct == pytest.approx(metrics.kelly_fraction_pct / 2.0, abs=0.1)
+
+    streaks = AnalyticsService.calculate_streaks(trades)
+    assert streaks["max_win_streak"] == 3
+    assert streaks["max_loss_streak"] == 2
+    assert streaks["current_streak"] == 1
+
+    # Verify metrics fields align
+    assert metrics.max_win_streak == 3
+    assert metrics.max_loss_streak == 2
+    assert metrics.current_streak == 1
+
+
+
 

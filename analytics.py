@@ -53,6 +53,11 @@ class DashboardMetrics:
     sqn_rating: str = "N/A"           # Рейтинг системы: Poor, Average, Good, Excellent, Holy Grail
     sharpe_ratio: float = 0.0         # Коэффициент Шарпа (per-trade)
     sortino_ratio: float = 0.0        # Коэффициент Сортино (downside deviation)
+    kelly_fraction_pct: float = 0.0   # Полный критерий Келли (% от депозита)
+    half_kelly_pct: float = 0.0       # Половинный Келли (% от депозита - Quant Standard)
+    max_win_streak: int = 0           # Максимальная серия побед подряд
+    max_loss_streak: int = 0          # Максимальная серия поражений подряд
+    current_streak: int = 0           # Текущая серия (+N побед или -N убытков)
 
 
 TradingMetrics = DashboardMetrics
@@ -371,6 +376,46 @@ class AnalyticsService:
             sharpe = 0.0
             sortino = 0.0
 
+        # 9. Kelly Criterion Calculator (f* = (p * (b + 1) - 1) / b)
+        if len(wins) > 0 and len(losses) > 0 and total > 0:
+            p_win = len(wins) / total
+            avg_w = float(gross_profit / len(wins))
+            avg_l = float(gross_loss / len(losses))
+            payoff_b = (avg_w / avg_l) if avg_l > 0 else 1.0
+            if payoff_b > 0:
+                raw_kelly = (p_win * (payoff_b + 1) - 1.0) / payoff_b
+                kelly_pct = round(max(float(raw_kelly * 100), 0.0), 1)
+                kelly_pct = min(kelly_pct, 25.0)  # Безопасный потолок риска
+            else:
+                kelly_pct = 0.0
+            half_kelly = round(kelly_pct / 2.0, 1)
+        else:
+            kelly_pct = 0.0
+            half_kelly = 0.0
+
+        # 10. Consecutive Streaks Analysis
+        max_w_streak = 0
+        max_l_streak = 0
+        curr_streak = 0
+        cur_w = 0
+        cur_l = 0
+
+        for t in sorted_asc:
+            p = float(t.net_pnl or 0.0)
+            if p > 0:
+                cur_w += 1
+                cur_l = 0
+                max_w_streak = max(max_w_streak, cur_w)
+                curr_streak = cur_w
+            elif p < 0:
+                cur_l += 1
+                cur_w = 0
+                max_l_streak = max(max_l_streak, cur_l)
+                curr_streak = -cur_l
+            else:
+                cur_w = 0
+                cur_l = 0
+
         metrics_obj = DashboardMetrics(
             total_trades=total,
             winning_trades=len(wins),
@@ -398,6 +443,11 @@ class AnalyticsService:
             sqn_rating=sqn_grade,
             sharpe_ratio=sharpe,
             sortino_ratio=sortino,
+            kelly_fraction_pct=kelly_pct,
+            half_kelly_pct=half_kelly,
+            max_win_streak=max_w_streak,
+            max_loss_streak=max_l_streak,
+            current_streak=curr_streak,
         )
 
         # Validation Pipeline: проверка и замена NaN/Inf на 0.0
@@ -716,6 +766,85 @@ class AnalyticsService:
             "best_hour": best_hour,
             "worst_hour": worst_hour,
             "total_trades": len(trades),
+        }
+
+    @classmethod
+    def calculate_kelly_criterion(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Квантовый калькулятор оптимальной доли капитала по критерию Келли:
+        f* = (p * (b + 1) - 1) / b
+        где p - вероятность выигрыша, b - коэффициент выигрыша (Payoff Ratio).
+        Рекомендуется Half-Kelly (50% от f*) для снижения риска просадки.
+        """
+        metrics = cls.calculate_metrics(trades)
+        return {
+            "kelly_fraction_pct": metrics.kelly_fraction_pct,
+            "half_kelly_pct": metrics.half_kelly_pct,
+            "winrate": metrics.winrate,
+            "is_edge_positive": metrics.kelly_fraction_pct > 0.0,
+            "recommendation": (
+                f"Рекомендуемый риск на сделку: {metrics.half_kelly_pct:.1f}% от депозита (Half-Kelly)"
+                if metrics.kelly_fraction_pct > 0.0
+                else "Математическое преимущество отсутствует. Торгуйте минимальным лотом."
+            ),
+        }
+
+    @classmethod
+    def calculate_streaks(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ серий непрерывных побед и поражений (Consecutive Streaks).
+        """
+        sorted_asc = sorted([t for t in trades if t.closed_at], key=lambda x: x.closed_at) or trades
+
+        win_streaks = []
+        loss_streaks = []
+        cur_w = 0
+        cur_l = 0
+
+        for t in sorted_asc:
+            p = float(t.net_pnl or 0.0)
+            if p > 0:
+                cur_w += 1
+                if cur_l > 0:
+                    loss_streaks.append(cur_l)
+                    cur_l = 0
+            elif p < 0:
+                cur_l += 1
+                if cur_w > 0:
+                    win_streaks.append(cur_w)
+                    cur_w = 0
+
+        if cur_w > 0:
+            win_streaks.append(cur_w)
+        if cur_l > 0:
+            loss_streaks.append(cur_l)
+
+        max_w = max(win_streaks or [0])
+        max_l = max(loss_streaks or [0])
+        avg_w = round(float(np.mean(win_streaks)), 1) if win_streaks else 0.0
+        avg_l = round(float(np.mean(loss_streaks)), 1) if loss_streaks else 0.0
+
+        current_streak = 0
+        if sorted_asc:
+            last_pnls = [float(t.net_pnl or 0.0) for t in sorted_asc]
+            last_sign = 1 if last_pnls[-1] > 0 else (-1 if last_pnls[-1] < 0 else 0)
+            streak_len = 0
+            for p in reversed(last_pnls):
+                s = 1 if p > 0 else (-1 if p < 0 else 0)
+                if s == last_sign and s != 0:
+                    streak_len += 1
+                else:
+                    break
+            current_streak = streak_len * last_sign
+
+        return {
+            "max_win_streak": max_w,
+            "max_loss_streak": max_l,
+            "avg_win_streak": avg_w,
+            "avg_loss_streak": avg_l,
+            "current_streak": current_streak,
+            "total_win_sequences": len(win_streaks),
+            "total_loss_sequences": len(loss_streaks),
         }
 
     @classmethod
@@ -1860,5 +1989,16 @@ class WaveAICoachService:
             "text": f"Комиссии и свопы биржи составили ${tot_costs:,.2f} ({fee_drag:.1f}% от валовой прибыли).",
             "recommendation": "Переход на лимитные Maker-ордера сэкономит до 40% брокерских расходов.",
         })
+
+        # 6. Квантовый сайзинг (Критерий Келли & Серии)
+        if metrics.half_kelly_pct > 0:
+            insights.append({
+                "title": "Оптимальный риск (Критерий Келли)",
+                "category": "POSITION_SIZING",
+                "color": "#10B981",
+                "icon": "CALCULATE_ROUNDED",
+                "text": f"Математический критерий Келли рекомендует риск {metrics.half_kelly_pct:.1f}% от капитала (Half-Kelly) при текущем винрейте {metrics.winrate:.1f}%.",
+                "recommendation": f"Макс. серия побед: {metrics.max_win_streak} сд. (поражений: {metrics.max_loss_streak} сд.). Не превышайте риск {min(metrics.half_kelly_pct, 2.5):.1f}% на сделку.",
+            })
 
         return insights
