@@ -136,7 +136,7 @@ if __name__ == "__main__":
             host="0.0.0.0",
             port=port,
             assets_dir="assets",
-            web_renderer=ft.WebRenderer.AUTO,
+            web_renderer=ft.WebRenderer.CANVAS_KIT,
         )
     else:
         try:
@@ -153,5 +153,5 @@ if __name__ == "__main__":
                 host="0.0.0.0",
                 port=port,
                 assets_dir="assets",
-                web_renderer=ft.WebRenderer.AUTO,
+                web_renderer=ft.WebRenderer.CANVAS_KIT,
             )

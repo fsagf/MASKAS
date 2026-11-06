@@ -15,4 +15,5 @@ assets/*.html
 .system_generated/
 tmp_yaml/
 .pytest_cache/
+assets/canvaskit/
 

@@ -99,14 +99,14 @@ def run() -> None:
     port = 8550
     print_server_banner(port)
 
-    # Запуск Flet Web с автоматическим легковесным рендерером для мобильных браузеров
+    # Запуск Flet Web с локальным CanvasKit (100% офлайн без внешних запросов)
     ft.app(
         target=main,
         view=ft.AppView.WEB_BROWSER,
         host="0.0.0.0",
         port=port,
         assets_dir="assets",
-        web_renderer=ft.WebRenderer.AUTO,
+        web_renderer=ft.WebRenderer.CANVAS_KIT,
     )
 
 
