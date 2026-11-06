@@ -114,6 +114,7 @@ class DashboardView(ft.Container):
         self.metrics_grid = ft.ResponsiveRow(spacing=12, run_spacing=12)
         self.chart_container = ft.Container(expand=True)
         self.monte_carlo_container = ft.Container()
+        self.session_matrix_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
 
         # Переключатель тильт-фильтра
@@ -254,6 +255,8 @@ class DashboardView(ft.Container):
                 chart_card,
                 ft.Container(height=4),
                 calendar_and_quant,
+                ft.Container(height=4),
+                self.session_matrix_container,
                 ft.Container(height=40),  # Свободный скролл
             ],
             spacing=10,
@@ -644,6 +647,163 @@ class DashboardView(ft.Container):
             border_radius=RADIUS_SM,
             border=ft.border.all(1, BORDER_SUBTLE),
             expand=True,
+        )
+
+    def _build_session_matrix_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивная квант-матрица торговых сессий (Asia, London, New York, Off-Hours).
+        """
+        matrix = AnalyticsService.calculate_session_matrix(trades)
+        sessions = matrix["sessions"]
+        best_key = matrix["best_session"]
+        worst_key = matrix["worst_session"]
+
+        session_cards = []
+        for s_key in ["ASIAN", "LONDON", "NEW_YORK", "OFF_HOURS"]:
+            s = sessions[s_key]
+            is_best = (s_key == best_key and s["trades_count"] > 0 and s["net_pnl"] > 0)
+            is_worst = (s_key == worst_key and s["trades_count"] > 0 and s["net_pnl"] < 0)
+
+            border_color = PROFIT if is_best else (LOSS if is_worst else BORDER_SUBTLE)
+            pnl_color = PROFIT if s["net_pnl"] > 0 else (LOSS if s["net_pnl"] < 0 else TEXT_MUTED)
+            wr_color = PROFIT if s["winrate"] >= 50 else (LOSS if s["trades_count"] > 0 else TEXT_MUTED)
+
+            if is_best:
+                status_badge = ft.Container(
+                    content=ft.Text("ТОП СЕССИЯ", size=9, weight=ft.FontWeight.BOLD, color=PROFIT, font_family=FONT_MONO),
+                    bgcolor=ft.Colors.with_opacity(0.15, PROFIT),
+                    padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                    border_radius=RADIUS_SM,
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.35, PROFIT)),
+                )
+            elif is_worst:
+                status_badge = ft.Container(
+                    content=ft.Text("ЗОНА РИСКА", size=9, weight=ft.FontWeight.BOLD, color=LOSS, font_family=FONT_MONO),
+                    bgcolor=ft.Colors.with_opacity(0.15, LOSS),
+                    padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                    border_radius=RADIUS_SM,
+                    border=ft.border.all(1, ft.Colors.with_opacity(0.35, LOSS)),
+                )
+            else:
+                status_badge = ft.Container(
+                    content=ft.Text(s["time_range"], size=9, color=TEXT_MUTED, font_family=FONT_MONO),
+                )
+
+            wr_ratio = (s["winrate"] / 100.0) if s["trades_count"] > 0 else 0.0
+            progress_bar = ft.ProgressBar(
+                value=wr_ratio,
+                color=wr_color,
+                bgcolor=SURFACE_3,
+                height=4,
+                border_radius=ft.border_radius.all(2),
+            )
+
+            card_content = ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Container(
+                                        width=8,
+                                        height=8,
+                                        border_radius=ft.border_radius.all(4),
+                                        bgcolor=s["color"],
+                                    ),
+                                    ft.Text(s["name"], size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                ],
+                                spacing=6,
+                            ),
+                            status_badge,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Text(s["sub"], size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                    ft.Divider(color=BORDER_SUBTLE, height=8),
+                    ft.Row(
+                        controls=[
+                            ft.Text(
+                                f"{s['net_pnl']:+,.2f} $" if s["trades_count"] > 0 else "0.00 $",
+                                size=16,
+                                weight=ft.FontWeight.BOLD,
+                                color=pnl_color,
+                                font_family=FONT_MONO,
+                            ),
+                            ft.Text(
+                                f"{s['winrate']:.1f}% WR" if s["trades_count"] > 0 else "—",
+                                size=11,
+                                weight=ft.FontWeight.W_600,
+                                color=wr_color,
+                                font_family=FONT_MONO,
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    progress_bar,
+                    ft.Row(
+                        controls=[
+                            ft.Text(f"{s['trades_count']} сд.", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                            ft.Text(f"PF: {s['profit_factor']:.2f}" if s["trades_count"] > 0 else "PF: —", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                            ft.Text(f"Exp: {s['expectancy']:+,.1f}$" if s["trades_count"] > 0 else "Exp: —", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                ],
+                spacing=5,
+            )
+
+            session_card = ft.Container(
+                content=card_content,
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1.2 if (is_best or is_worst) else 1, border_color),
+                col={"sm": 12, "md": 6, "lg": 3},
+            )
+            session_cards.append(session_card)
+
+        if best_key and sessions[best_key]["trades_count"] > 0:
+            b = sessions[best_key]
+            insight_text = f"Лидер: {b['name']} ({b['net_pnl']:+,.2f} $ • WR {b['winrate']:.0f}%)"
+        else:
+            insight_text = "Торговые сессии синхронизированы по UTC"
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.PUBLIC_ROUNDED, color=ACCENT_PRIMARY, size=18),
+                                    ft.Text("Матрица торговых сессий", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Asia • London • New York • Off-Hours)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            ft.Container(
+                                content=ft.Text(insight_text, size=10, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+                                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                                border_radius=RADIUS_SM,
+                                border=ft.border.all(1, ft.Colors.with_opacity(0.25, ACCENT_PRIMARY)),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(
+                        controls=session_cards,
+                        spacing=12,
+                        run_spacing=12,
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
         )
 
     def _on_tilt_toggle(self, _):
@@ -1101,6 +1261,16 @@ class DashboardView(ft.Container):
                 content=ft.Text(f"Ошибка рендеринга блока графика: {ex}", color=ft.Colors.ERROR),
                 alignment=ft.alignment.center,
                 height=240,
+            )
+
+        # 5. Обновление матрицы торговых сессий (Error Boundary)
+        try:
+            self.session_matrix_container.content = self._build_session_matrix_card(trades)
+        except Exception as ex_sess:
+            logging.exception(f"[DashboardView] Error rendering Session Matrix: {ex_sess}")
+            self.session_matrix_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга матрицы сессий: {ex_sess}", color=ft.Colors.ERROR),
+                padding=12,
             )
 
         if self.page:

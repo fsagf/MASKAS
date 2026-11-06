@@ -480,6 +480,140 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_session_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Квантовая матрица эффективности по торговым сессиям (UTC):
+        - Asian: 00:00 – 08:00 UTC (Tokyo, Sydney, Hong Kong)
+        - London: 08:00 – 13:00 UTC (Frankfurt, London Open)
+        - New York: 13:00 – 21:00 UTC (Wall Street, US Overlap)
+        - Off-Hours: 21:00 – 00:00 UTC (После закрытия США, низкая ликвидность)
+        """
+        sessions_def = {
+            "ASIAN": {
+                "key": "ASIAN",
+                "name": "Азиатская сессия",
+                "sub": "Tokyo / Sydney / HK",
+                "time_range": "00:00 – 08:00 UTC",
+                "color": "#22D3EE",  # Neon Cyan
+                "icon": "nights_stay_rounded",
+            },
+            "LONDON": {
+                "key": "LONDON",
+                "name": "Лондонская сессия",
+                "sub": "London / Frankfurt Open",
+                "time_range": "08:00 – 13:00 UTC",
+                "color": "#6366F1",  # Indigo
+                "icon": "wb_sunny_rounded",
+            },
+            "NEW_YORK": {
+                "key": "NEW_YORK",
+                "name": "Американская сессия",
+                "sub": "Wall Street / NYSE / CME",
+                "time_range": "13:00 – 21:00 UTC",
+                "color": "#7C5CFF",  # Accent Purple
+                "icon": "trending_up_rounded",
+            },
+            "OFF_HOURS": {
+                "key": "OFF_HOURS",
+                "name": "Внесессионное время",
+                "sub": "Post-market / Low Liquidity",
+                "time_range": "21:00 – 00:00 UTC",
+                "color": "#FBBF24",  # Amber
+                "icon": "bedtime_rounded",
+            },
+        }
+
+        bucketed: Dict[str, List[Trade]] = {k: [] for k in sessions_def}
+
+        for t in trades:
+            dt = t.opened_at or t.closed_at or getattr(t, "date", None)
+            if not dt:
+                bucketed["NEW_YORK"].append(t)
+                continue
+            if isinstance(dt, str):
+                try:
+                    dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+                except Exception:
+                    dt = datetime.now()
+
+            hour = dt.hour
+            if 0 <= hour < 8:
+                bucketed["ASIAN"].append(t)
+            elif 8 <= hour < 13:
+                bucketed["LONDON"].append(t)
+            elif 13 <= hour < 21:
+                bucketed["NEW_YORK"].append(t)
+            else:
+                bucketed["OFF_HOURS"].append(t)
+
+        results = {}
+        for s_key, s_trades in bucketed.items():
+            meta = sessions_def[s_key]
+            count = len(s_trades)
+            if count == 0:
+                results[s_key] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "gross_profit": 0.0,
+                    "gross_loss": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                    "expectancy": 0.0,
+                    "best_trade": 0.0,
+                    "worst_trade": 0.0,
+                }
+                continue
+
+            pnls = [t.net_pnl for t in s_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / count * 100, 1)
+            net_pnl = round(float(sum(pnls)), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            avg_pnl = round(net_pnl / count, 2)
+
+            win_rate_dec = len(wins) / count
+            loss_rate_dec = len(losses) / count
+            avg_w = (gross_w / len(wins)) if wins else 0.0
+            avg_l = (gross_l / len(losses)) if losses else 0.0
+            exp = round((win_rate_dec * avg_w) - (loss_rate_dec * avg_l), 2)
+
+            results[s_key] = {
+                **meta,
+                "trades_count": count,
+                "win_trades": len(wins),
+                "loss_trades": len(losses),
+                "winrate": winrate,
+                "net_pnl": net_pnl,
+                "gross_profit": round(gross_w, 2),
+                "gross_loss": round(gross_l, 2),
+                "profit_factor": pf,
+                "avg_trade_pnl": avg_pnl,
+                "expectancy": exp,
+                "best_trade": round(max(pnls), 2) if pnls else 0.0,
+                "worst_trade": round(min(pnls), 2) if pnls else 0.0,
+            }
+
+        # Вычисление лидеров и аутсайдеров
+        active_sessions = [res for res in results.values() if res["trades_count"] > 0]
+        best_session_key = max(active_sessions, key=lambda x: x["net_pnl"])["key"] if active_sessions else None
+        worst_session_key = min(active_sessions, key=lambda x: x["net_pnl"])["key"] if active_sessions else None
+
+        return {
+            "sessions": results,
+            "best_session": best_session_key,
+            "worst_session": worst_session_key,
+            "total_analyzed_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

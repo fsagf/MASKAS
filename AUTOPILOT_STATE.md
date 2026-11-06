@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 1 (Completed) -> Starting Iteration 2
+- **Iteration:** 2 (Completed) -> Starting Iteration 3
 - **Current Phase:** Phase 4: Full Regression & Close Loop
-- **Status:** All 33 Tests Green (100% Passing). Feature Deployed.
+- **Status:** All 34 Tests Green (100% Passing). Session Performance Matrix Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://172.20.10.4:8550` (Daemon task running)
 
@@ -29,27 +29,28 @@
   - Added Sharpe Ratio & Sortino Ratio (downside deviation penalization) in `DashboardMetrics`.
   - Upgraded Dashboard R-Multiple KPI card with real-time SQN rating subtitle.
   - Upgraded Monte Carlo Quant Panel with 4 adaptive metric mini-boxes: Risk of Ruin, SQN Van Tharp, Sharpe / Sortino, and Expectancy Run.
+- [x] **Session Performance Matrix (Iteration 2):**
+  - Implemented `AnalyticsService.calculate_session_matrix(trades)`: categorizes trades by UTC session (Asian 00:00–08:00, London 08:00–13:00, New York 13:00–21:00, Off-Hours 21:00–00:00).
+  - Calculates per session: Winrate %, Net PnL $, Profit Factor, Expectancy, Trades Count, Best & Worst trades.
+  - Detects Top Session (leader) and Risk Zone (drawdown session).
+  - Created interactive card `_build_session_matrix_card` with responsive progress bars, session colors, and leader highlight chips.
+  - Integrated into `DashboardView` below the Monte Carlo and Calendar row.
 - [x] **Monte Carlo Simulator:** 10,000 bootstrap simulations accounting for initial account balance and equity cone percentiles (5th, 50th, 95th).
 - [x] **Tilt & Psychology Engine:** Detects revenge trading (<10 min cooldown after loss), over-risking (>2x avg risk), and break-even violation patterns.
 - [x] **Wave AI Coach:** Rule-based quant trading coach diagnosing fee drag, MAE/MFE retention loss, and risk discipline.
-- [x] **UI Polish Sprint:**
-  - Trade Modal and Account Modal layout overflows fixed with responsive scrolling.
-  - Monte Carlo card redesigned to a vertical stacked card layout with 4 metric chips and full-width cone chart.
-  - Underwater drawdown chart negative axis collision resolved.
-  - Backtest candlestick chart expanded from 400px fixed width to dynamic responsive width (`CrossAxisAlignment.STRETCH`).
 - [x] **High-Performance Local Server Runner:** `run_local_server.py` with multi-adapter IP detection, VPN warning, terminal ASCII QR-code, and 1-click `ЗАПУСК_СЕРВЕРА.bat`.
-- [x] **Total QA Suite (33 tests):**
+- [x] **Total QA Suite (34 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 6 tests (including SQN, Sharpe & Sortino).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 7 tests (including SQN, Sharpe & Sortino, and Session Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests.
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Session Matrix card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 2+)
-- [ ] **TradeZella / TraderWaves:** Trading Session Performance Matrix (Asia, London, New York) with volume, winrate, and expectancy breakdown per session.
-- [ ] **TradeZella:** Interactive Day-of-Week & Hour-of-Day PnL Heatmap with tooltips.
+## Competitor Backlog (R&D for Iteration 3+)
+- [ ] **TradeZella:** Interactive Day-of-Week & Hour-of-Day PnL Heatmap with tooltips (Iteration 3 Target).
 - [ ] **TraderSync / Linear:** Linear-style keyboard shortcut command palette (Ctrl+K) for instant trade lookup and modal triggers.
 - [ ] **Edgewonk:** Setup / Strategy Efficiency Matrix (ranking strategy tags by profit factor & SQN).
+- [ ] **Quant Trading:** Kelly Criterion calculator (optimal risk allocation per trade based on winrate and payoff ratio).

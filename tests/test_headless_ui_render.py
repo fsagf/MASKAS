@@ -36,9 +36,14 @@ def test_dashboard_view_headless_render():
     assert hasattr(dash, "metrics_grid")
     assert hasattr(dash, "chart_container")
     assert hasattr(dash, "monte_carlo_container")
+    assert hasattr(dash, "session_matrix_container")
     assert hasattr(dash, "pnl_calendar")
     assert hasattr(dash, "tilt_switch")
     assert dash.content is not None
+
+    # Verify session matrix card renders cleanly
+    session_card = dash._build_session_matrix_card(trades=[])
+    assert session_card is not None
 
 
 def test_journal_view_headless_render():

@@ -242,3 +242,80 @@ def test_sqn_and_sharpe_sortino_metrics():
     assert metrics.sharpe_ratio > 0.0
     assert metrics.sortino_ratio >= metrics.sharpe_ratio  # Sortino typically >= Sharpe when upside dominates
 
+
+def test_session_performance_matrix():
+    """Verify session mapping and quant metrics for Asian, London, NY, and Off-Hours sessions."""
+    # Empty trades test
+    empty_res = AnalyticsService.calculate_session_matrix([])
+    assert "sessions" in empty_res
+    assert set(empty_res["sessions"].keys()) == {"ASIAN", "LONDON", "NEW_YORK", "OFF_HOURS"}
+    assert empty_res["best_session"] is None
+    assert empty_res["worst_session"] is None
+
+    # Mixed sessions trades
+    t_asia = Trade(
+        ticker="BTC/USDT",
+        direction="LONG",
+        entry_price=50000.0,
+        exit_price=51000.0,
+        volume=1.0,
+        opened_at=datetime.datetime(2026, 3, 2, 3, 30, 0),  # 03:30 -> ASIAN
+    )
+    t_london_win = Trade(
+        ticker="EUR/USD",
+        direction="LONG",
+        entry_price=1.0800,
+        exit_price=1.0900,
+        volume=100000.0,
+        opened_at=datetime.datetime(2026, 3, 2, 9, 15, 0),  # 09:15 -> LONDON
+    )
+    t_london_loss = Trade(
+        ticker="GBP/USD",
+        direction="SHORT",
+        entry_price=1.2700,
+        exit_price=1.2750,
+        volume=50000.0,
+        opened_at=datetime.datetime(2026, 3, 2, 11, 45, 0),  # 11:45 -> LONDON
+    )
+    t_ny = Trade(
+        ticker="NVDA",
+        direction="LONG",
+        entry_price=120.0,
+        exit_price=135.0,
+        volume=50.0,
+        opened_at=datetime.datetime(2026, 3, 2, 15, 30, 0),  # 15:30 -> NEW_YORK
+    )
+    t_off = Trade(
+        ticker="ETH/USDT",
+        direction="SHORT",
+        entry_price=3000.0,
+        exit_price=3100.0,
+        volume=2.0,
+        opened_at=datetime.datetime(2026, 3, 2, 22, 10, 0),  # 22:10 -> OFF_HOURS
+    )
+
+    trades = [t_asia, t_london_win, t_london_loss, t_ny, t_off]
+    res = AnalyticsService.calculate_session_matrix(trades)
+    s = res["sessions"]
+
+    assert s["ASIAN"]["trades_count"] == 1
+    assert s["ASIAN"]["net_pnl"] == 1000.0
+    assert s["ASIAN"]["winrate"] == 100.0
+
+    assert s["LONDON"]["trades_count"] == 2
+    assert s["LONDON"]["win_trades"] == 1
+    assert s["LONDON"]["loss_trades"] == 1
+    assert s["LONDON"]["winrate"] == 50.0
+
+    assert s["NEW_YORK"]["trades_count"] == 1
+    assert s["NEW_YORK"]["net_pnl"] == 750.0
+
+    assert s["OFF_HOURS"]["trades_count"] == 1
+    assert s["OFF_HOURS"]["net_pnl"] == -200.0
+    assert s["OFF_HOURS"]["winrate"] == 0.0
+
+    # Best session should be ASIAN or LONDON (highest net_pnl), worst should be OFF_HOURS
+    assert res["worst_session"] == "OFF_HOURS"
+    assert res["best_session"] in ("ASIAN", "LONDON")
+
+
