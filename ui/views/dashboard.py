@@ -123,6 +123,7 @@ class DashboardView(ft.Container):
         self.drawdown_recovery_container = ft.Container()
         self.excursion_matrix_container = ft.Container()
         self.monthly_phase_container = ft.Container()
+        self.sizing_simulator_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -280,6 +281,8 @@ class DashboardView(ft.Container):
                 self.excursion_matrix_container,
                 ft.Container(height=4),
                 self.monthly_phase_container,
+                ft.Container(height=4),
+                self.sizing_simulator_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -1980,6 +1983,143 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_position_sizing_simulator_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный симулятор мани-менеджмента и моделей риска (Position Sizing Simulator).
+        """
+        sim = AnalyticsService.simulate_position_sizing_models(trades, initial_balance=10000.0)
+        models = sim["models"]
+        optimal_k = sim["optimal_model"]
+        insight = sim["optimal_insight"]
+
+        cards = []
+        for m_key in ["FLAT_1PCT", "HALF_KELLY", "FULL_KELLY", "FIXED_DOLLAR"]:
+            m = models[m_key]
+            is_opt = (m_key == optimal_k)
+
+            ret_val = m["total_return_pct"]
+            ret_col = PROFIT if ret_val >= 0 else LOSS
+            ret_sign = "+" if ret_val >= 0 else ""
+
+            leader_chip = ft.Container(
+                content=ft.Text("OPTIMAL", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                bgcolor=ft.Colors.with_opacity(0.15, ACCENT_PRIMARY),
+                padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.4, ACCENT_PRIMARY)),
+            ) if is_opt else ft.Container()
+
+            card_widget = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Column(
+                                    controls=[
+                                        ft.Text(m["name"], size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                        ft.Text(m["sub"], size=10, color=TEXT_MUTED, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                leader_chip,
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=4),
+                        # Метрики Equity, Return, Max DD
+                        ft.Row(
+                            controls=[
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Итоговый баланс", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"${m['final_equity']:,.2f}", size=13, weight=ft.FontWeight.BOLD, color=ret_col, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Доходность", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{ret_sign}{ret_val:,.1f}%", size=11, weight=ft.FontWeight.W_600, color=ret_col, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Max Просадка", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"-{m['max_drawdown_pct']:.1f}%", size=11, weight=ft.FontWeight.W_600, color=LOSS if m['max_drawdown_pct'] > 0 else TEXT_MUTED, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=4),
+                        ft.Container(
+                            content=ft.Text(m["badge"], size=9, color=m["color"], font_family=FONT_MONO),
+                            bgcolor=ft.Colors.with_opacity(0.12, m["color"]),
+                            padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                            border_radius=RADIUS_SM,
+                        ),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.35, m["color"]) if is_opt else BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            )
+            cards.append(card_widget)
+
+        header_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.SAVINGS_ROUNDED, size=13, color=ACCENT_PRIMARY),
+                    ft.Text(
+                        insight,
+                        size=10,
+                        weight=ft.FontWeight.BOLD,
+                        color=ACCENT_PRIMARY,
+                        font_family=FONT_MONO,
+                    ),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, ACCENT_PRIMARY)),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.MONETIZATION_ON_ROUNDED, color="#7C5CFF", size=18),
+                                    ft.Text("Симулятор моделей мани-менеджмента", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Position Sizing & Kelly)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=cards, spacing=10, run_spacing=10),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -2522,6 +2662,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Monthly Phase Matrix: {ex_phase}")
             self.monthly_phase_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга фаз месяца: {ex_phase}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.8 Обновление симулятора мани-менеджмента (Error Boundary)
+        try:
+            self.sizing_simulator_container.content = self._build_position_sizing_simulator_card(trades)
+        except Exception as ex_sim:
+            logging.exception(f"[DashboardView] Error rendering Sizing Simulator: {ex_sim}")
+            self.sizing_simulator_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга симулятора сайзинга: {ex_sim}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

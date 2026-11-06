@@ -711,6 +711,34 @@ def test_monthly_phase_matrix():
     assert "Начало месяца" in mat["seasonal_insight"]
 
 
+def test_position_sizing_simulator():
+    """Verify QuantConnect-style position sizing simulation across Flat 1%, Kelly, and Fixed risk."""
+    # 1. Empty trades
+    empty_sim = AnalyticsService.simulate_position_sizing_models([])
+    assert set(empty_sim["models"].keys()) == {"FLAT_1PCT", "HALF_KELLY", "FULL_KELLY", "FIXED_DOLLAR"}
+    assert empty_sim["optimal_model"] == "HALF_KELLY"
+
+    # 2. Sequential trades with positive edge
+    now = datetime.datetime(2026, 3, 1, 10, 0, 0)
+    t1 = Trade(direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0, stop_loss=90.0, closed_at=now + datetime.timedelta(hours=1))  # R = +2.0
+    t2 = Trade(direction="LONG", entry_price=100.0, exit_price=115.0, volume=10.0, stop_loss=90.0, closed_at=now + datetime.timedelta(hours=2))  # R = +1.5
+    t3 = Trade(direction="LONG", entry_price=100.0, exit_price=90.0, volume=10.0, stop_loss=90.0, closed_at=now + datetime.timedelta(hours=3))   # R = -1.0
+    t4 = Trade(direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0, stop_loss=90.0, closed_at=now + datetime.timedelta(hours=4))  # R = +3.0
+
+    trades = [t1, t2, t3, t4]
+    sim = AnalyticsService.simulate_position_sizing_models(trades, initial_balance=10000.0)
+    models = sim["models"]
+
+    # All models should show positive growth with these net winning trades
+    assert models["FLAT_1PCT"]["final_equity"] > 10000.0
+    assert models["HALF_KELLY"]["final_equity"] > 10000.0
+    assert models["FIXED_DOLLAR"]["final_equity"] > 10000.0
+
+    assert sim["optimal_model"] in models
+    assert len(sim["optimal_insight"]) > 10
+
+
+
 
 
 

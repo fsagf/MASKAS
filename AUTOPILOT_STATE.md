@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 12 (Completed) -> Starting Iteration 13
+- **Iteration:** 13 (Completed) -> Starting Iteration 14
 - **Current Phase:** Phase 4: Full Regression & Close Loop
-- **Status:** All 43 Tests Green (100% Passing). Day-of-Month Performance & Seasonal Alpha Matrix Deployed.
+- **Status:** All 44 Tests Green (100% Passing). Position Sizing & Fractional Risk Curve Simulator Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -93,16 +93,22 @@
   - Identifies Top Edge Phase and seasonal performance insight.
   - Created `_build_monthly_phase_card` in `ui/views/dashboard.py` with 3 phase cards, winrate progress bars, peak edge badge, and insight header chip.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (43 tests):**
+- [x] **Position Sizing & Fractional Risk Curve Simulator (Iteration 13):**
+  - Implemented `AnalyticsService.simulate_position_sizing_models(trades, initial_balance)`: models historical equity curves under 4 money management regimes (`Flat 1%`, `Half-Kelly`, `Full Kelly`, `Fixed $100`).
+  - Evaluates Final Equity, Total Return %, and Max Drawdown % for each sizing rule.
+  - Discovers the optimal Calmar-based risk rule and generates actionable sizing guidance.
+  - Created `_build_position_sizing_simulator_card` in `ui/views/dashboard.py` with 4 model cards, return/drawdown metrics, and optimal rule recommendation chip.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (44 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 16 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 17 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Monthly Phase card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Sizing Simulator card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 13+)
-- [ ] **QuantConnect / PortfolioVisualizer:** Position Sizing & Fractional Risk Curve Simulator (comparing Flat 1%, Half-Kelly, Full Kelly, and Fixed Dollar sizing models on historical equity curve).
-- [ ] **TradeZella:** Playbook Setup Winrate vs Market Trend Alignment Matrix (Bullish vs Bearish vs Choppy regimes).
+## Competitor Backlog (R&D for Iteration 14+)
+- [ ] **TradeZella / TraderSync:** Market Regime Alignment Matrix (Trend vs Range vs Volatile chop setup winrates).
+- [ ] **TradingView / Edgewonk:** Interactive R-Multiple Frequency Distribution Bar & Skewness Engine.

@@ -45,6 +45,7 @@ def test_dashboard_view_headless_render():
     assert hasattr(dash, "drawdown_recovery_container")
     assert hasattr(dash, "excursion_matrix_container")
     assert hasattr(dash, "monthly_phase_container")
+    assert hasattr(dash, "sizing_simulator_container")
     assert hasattr(dash, "time_heatmap")
     assert hasattr(dash, "pnl_calendar")
     assert hasattr(dash, "tilt_switch")
@@ -81,6 +82,10 @@ def test_dashboard_view_headless_render():
     # Verify monthly phase card renders cleanly
     phase_card = dash._build_monthly_phase_card(trades=[])
     assert phase_card is not None
+
+    # Verify position sizing simulator card renders cleanly
+    sizing_card = dash._build_position_sizing_simulator_card(trades=[])
+    assert sizing_card is not None
 
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None

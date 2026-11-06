@@ -1605,6 +1605,146 @@ class AnalyticsService:
         }
 
     @classmethod
+    def simulate_position_sizing_models(
+        cls,
+        trades: List[Trade],
+        initial_balance: float = 10000.0,
+    ) -> Dict[str, Any]:
+        """
+        Квантовый симулятор моделей мани-менеджмента и сайзинга позиций (QuantConnect / PortfolioVisualizer).
+        Сравнивает 4 модели управления риском на исторических сделках трейдера:
+        - FLAT_1PCT: Фиксированный 1% риска от текущего депозита.
+        - HALF_KELLY: Половинный критерий Келли (квантовый оптимум).
+        - FULL_KELLY: Полный критерий Келли (максимальный рост).
+        - FIXED_DOLLAR: Фиксированный риск $100 на сделку.
+        """
+        if not trades:
+            empty_models = {
+                "FLAT_1PCT": {"name": "Фиксированный 1%", "sub": "Консервативный стандарт", "final_equity": initial_balance, "total_return_pct": 0.0, "max_drawdown_pct": 0.0, "color": "#10B981", "badge": "Низкий риск"},
+                "HALF_KELLY": {"name": "Half-Kelly", "sub": "Квантовый оптимум", "final_equity": initial_balance, "total_return_pct": 0.0, "max_drawdown_pct": 0.0, "color": "#7C5CFF", "badge": "Оптимальный баланс"},
+                "FULL_KELLY": {"name": "Full Kelly", "sub": "Агрессивный рост", "final_equity": initial_balance, "total_return_pct": 0.0, "max_drawdown_pct": 0.0, "color": "#F59E0B", "badge": "Высокая волатильность"},
+                "FIXED_DOLLAR": {"name": "Фикс $100 Risk", "sub": "Базовый бенчмарк", "final_equity": initial_balance, "total_return_pct": 0.0, "max_drawdown_pct": 0.0, "color": "#6366F1", "badge": "Без реинвестирования"},
+            }
+            return {
+                "models": empty_models,
+                "optimal_model": "HALF_KELLY",
+                "optimal_insight": "Симулятор мани-менеджмента активен",
+                "initial_balance": initial_balance,
+            }
+
+        sorted_trades = sorted(
+            trades,
+            key=lambda t: (
+                t.closed_at or t.opened_at or getattr(t, "date", datetime.min),
+                t.id or 0,
+            ),
+        )
+
+        r_list = []
+        for t in sorted_trades:
+            raw_r = getattr(t, "r_multiple", 0.0) or 0.0
+            if raw_r != 0.0:
+                r_list.append(max(-10.0, min(20.0, raw_r)))
+            elif t.net_pnl != 0.0:
+                risk = getattr(t, "risk_amount", 100.0) or 100.0
+                if risk < 1.0:
+                    risk = 100.0
+                r_list.append(max(-10.0, min(20.0, t.net_pnl / risk)))
+            else:
+                r_list.append(0.0)
+
+        kelly_mat = cls.calculate_kelly_criterion(trades)
+        half_k_pct = max(0.5, min(12.5, kelly_mat.get("half_kelly_pct", 1.5)))
+        full_k_pct = max(1.0, min(25.0, kelly_mat.get("kelly_fraction_pct", 3.0)))
+
+        def simulate_curve(risk_mode: str, param: float) -> Tuple[float, float, float]:
+            equity = float(initial_balance)
+            peak = float(initial_balance)
+            max_dd_pct = 0.0
+
+            for r in r_list:
+                if risk_mode == "PERCENT":
+                    risk_usd = equity * (param / 100.0)
+                else:
+                    risk_usd = float(param)
+
+                pnl = risk_usd * r
+                equity = max(100.0, equity + pnl)
+
+                if equity > peak:
+                    peak = equity
+                else:
+                    dd = (peak - equity) / peak * 100.0
+                    if dd > max_dd_pct:
+                        max_dd_pct = dd
+
+            ret_pct = ((equity - initial_balance) / initial_balance) * 100.0
+            return round(equity, 2), round(ret_pct, 1), round(max_dd_pct, 1)
+
+        eq_flat, ret_flat, dd_flat = simulate_curve("PERCENT", 1.0)
+        eq_half_k, ret_half_k, dd_half_k = simulate_curve("PERCENT", half_k_pct)
+        eq_full_k, ret_full_k, dd_full_k = simulate_curve("PERCENT", full_k_pct)
+        eq_fixed, ret_fixed, dd_fixed = simulate_curve("FIXED", 100.0)
+
+        models = {
+            "FLAT_1PCT": {
+                "key": "FLAT_1PCT",
+                "name": "Фиксированный 1%",
+                "sub": "1% риска на сделку",
+                "final_equity": eq_flat,
+                "total_return_pct": ret_flat,
+                "max_drawdown_pct": dd_flat,
+                "color": "#10B981",
+                "badge": "Консервативный",
+            },
+            "HALF_KELLY": {
+                "key": "HALF_KELLY",
+                "name": f"Half-Kelly ({half_k_pct:.1f}%)",
+                "sub": "Квантовый оптимум Шарпа",
+                "final_equity": eq_half_k,
+                "total_return_pct": ret_half_k,
+                "max_drawdown_pct": dd_half_k,
+                "color": "#7C5CFF",
+                "badge": "Рекомендован",
+            },
+            "FULL_KELLY": {
+                "key": "FULL_KELLY",
+                "name": f"Full Kelly ({full_k_pct:.1f}%)",
+                "sub": "Максимальный рост",
+                "final_equity": eq_full_k,
+                "total_return_pct": ret_full_k,
+                "max_drawdown_pct": dd_full_k,
+                "color": "#F59E0B",
+                "badge": "Высокий риск",
+            },
+            "FIXED_DOLLAR": {
+                "key": "FIXED_DOLLAR",
+                "name": "Фикс $100 Risk",
+                "sub": "Без компаундинга",
+                "final_equity": eq_fixed,
+                "total_return_pct": ret_fixed,
+                "max_drawdown_pct": dd_fixed,
+                "color": "#6366F1",
+                "badge": "Бенчмарк",
+            },
+        }
+
+        def score(m):
+            dd = max(m["max_drawdown_pct"], 1.0)
+            return m["total_return_pct"] / dd
+
+        optimal_key = max(models.keys(), key=lambda k: score(models[k]))
+        opt = models[optimal_key]
+        insight = f"Оптимальный мани-менеджмент: {opt['name']} (Прирост: {opt['total_return_pct']:+,.1f}% при просадке {opt['max_drawdown_pct']}%)"
+
+        return {
+            "models": models,
+            "optimal_model": optimal_key,
+            "optimal_insight": insight,
+            "initial_balance": initial_balance,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[
