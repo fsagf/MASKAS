@@ -139,6 +139,7 @@ class DashboardView(ft.Container):
         self.factor_ic_container = ft.Container()
         self.trade_management_container = ft.Container()
         self.liquidity_sweep_container = ft.Container()
+        self.broker_cost_drag_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -360,9 +361,9 @@ class DashboardView(ft.Container):
             ("sessions", "⏱️ Время & Сессии", "5", ft.Icons.ACCESS_TIME_ROUNDED),
             ("psychology", "🧠 Психология & Риск", "5", ft.Icons.PSYCHOLOGY_ROUNDED),
             ("setups", "🎯 Сетапы & Альфа", "8", ft.Icons.TRACK_CHANGES_ROUNDED),
-            ("execution", "⚡ Исполнение & Сделки", "6", ft.Icons.BOLT_ROUNDED),
+            ("execution", "⚡ Исполнение & Сделки", "7", ft.Icons.BOLT_ROUNDED),
             ("prop", "🏆 Проп-Трейдинг", "1", ft.Icons.EMOJI_EVENTS_ROUNDED),
-            ("all", "📑 Все модули сразу", "25", ft.Icons.DASHBOARD_ROUNDED),
+            ("all", "📑 Все модули сразу", "26", ft.Icons.DASHBOARD_ROUNDED),
         ]
 
         pills = []
@@ -458,6 +459,7 @@ class DashboardView(ft.Container):
                 ("Распределение исходов R-Multiple", self.r_distribution_container),
                 ("Кривая эффективности Риск/Прибыль", self.rr_efficiency_container),
                 ("Скользящий 30-дневный импульс эджа", self.rolling_edge_container),
+                ("Аудит комиссий и издержек брокера", self.broker_cost_drag_container),
             ],
             "prop": [
                 ("Радар соответствия правилам проп-фирм", self.prop_consistency_container),
@@ -4972,6 +4974,237 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_broker_cost_drag_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивная декомпозиция издержек брокера, комиссий и скрытого проскальзывания (TradeMetria Cost Drag Engine).
+        """
+        matrix = AnalyticsService.calculate_broker_cost_drag_matrix(trades)
+        total_drag = matrix["total_broker_drag"]
+        total_comm = matrix["total_commissions"]
+        total_swap = matrix["total_swap_fees"]
+        total_slip = matrix["total_slippage"]
+        fee_pct = matrix["fee_drag_pct"]
+        avg_cost = matrix["avg_cost_per_trade"]
+        vamp_cnt = matrix["vampire_strategies_count"]
+        vamp_strats = matrix["vampire_strategies"]
+        eff_grade = matrix["efficiency_grade"]
+        grade_col = matrix["grade_color"]
+        insight = matrix["actionable_insight"]
+
+        header_badge = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.CHECK_CIRCLE_ROUNDED if eff_grade in ("EXCELLENT", "HEALTHY") else ft.Icons.WARNING_ROUNDED,
+                        size=13,
+                        color=grade_col,
+                    ),
+                    ft.Text(f"Драг издержек: {fee_pct}% ({eff_grade})", size=10, weight=ft.FontWeight.BOLD, color=grade_col, font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, grade_col),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.35, grade_col)),
+        )
+
+        kpis = [
+            # 1. Total Broker Cost Drag
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Суммарный драг брокера", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(f"-{fee_pct}%", size=9, weight=ft.FontWeight.BOLD, color=grade_col, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, grade_col),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"-${total_drag:,.2f}", size=18, weight=ft.FontWeight.BOLD, color=grade_col, font_family=FONT_MONO),
+                        ft.Text(f"Комиссии: ${total_comm:,.1f} • Своп: ${total_swap:,.1f}", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            # 2. Avg Cost Per Trade
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Ср. расход на сделку", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Icon(ft.Icons.RECEIPT_LONG_ROUNDED, size=14, color="#38BDF8"),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"${avg_cost:,.2f}", size=18, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                        ft.Text("Плата брокеру за вход/выход", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            # 3. Vampire Strategies Count
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Вампир-сетапы", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(
+                                        "В НОРМЕ" if vamp_cnt == 0 else f"{vamp_cnt} СЕТАПА",
+                                        size=9,
+                                        weight=ft.FontWeight.BOLD,
+                                        color="#10B981" if vamp_cnt == 0 else "#EF4444",
+                                        font_family=FONT_MONO,
+                                    ),
+                                    bgcolor=ft.Colors.with_opacity(0.12, "#10B981" if vamp_cnt == 0 else "#EF4444"),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{vamp_cnt}", size=18, weight=ft.FontWeight.BOLD, color="#10B981" if vamp_cnt == 0 else "#EF4444", font_family=FONT_MONO),
+                        ft.Text("В плюсе без учета сборов брокера", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            # 4. Net Retained Capital %
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Чистое сохранение прибыли", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Icon(ft.Icons.ACCOUNT_BALANCE_WALLET_ROUNDED, size=14, color="#10B981"),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{max(0.0, 100.0 - fee_pct):.1f}%", size=18, weight=ft.FontWeight.BOLD, color="#10B981", font_family=FONT_MONO),
+                        ft.Text("Остается трейдеру от валового профита", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+        ]
+
+        def _make_cost_chip(title: str, amount: float, color: str, sub: str) -> ft.Container:
+            return ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Container(width=6, height=6, border_radius=3, bgcolor=color),
+                        ft.Text(title, size=11, color=TEXT_PRIMARY, weight=ft.FontWeight.W_600, font_family=FONT_FAMILY),
+                        ft.Text(f"${amount:,.2f}", size=11, weight=ft.FontWeight.BOLD, color=color, font_family=FONT_MONO),
+                        ft.Text(f"({sub})", size=10, color=TEXT_MUTED, font_family=FONT_MONO),
+                    ],
+                    spacing=8,
+                    tight=True,
+                ),
+                bgcolor=SURFACE_3,
+                padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, BORDER_SUBTLE),
+            )
+
+        cost_chips = ft.Row(
+            controls=[
+                _make_cost_chip("Комиссии биржи", total_comm, "#38BDF8", "Trading Fee"),
+                _make_cost_chip("Свопы / Финансирование", total_swap, "#F59E0B", "Overnight Funding"),
+                _make_cost_chip("Скрытое проскальзывание", total_slip, "#A855F7", "Execution Slippage"),
+            ],
+            wrap=True,
+            spacing=8,
+            run_spacing=8,
+        )
+
+        insight_bar = ft.Container(
+            content=ft.Row(
+                controls=[
+                    ft.Icon(ft.Icons.LIGHTBULB_ROUNDED, size=15, color=grade_col),
+                    ft.Text(
+                        insight,
+                        size=11,
+                        color=TEXT_PRIMARY,
+                        weight=ft.FontWeight.W_500,
+                        font_family=FONT_FAMILY,
+                        expand=True,
+                    ),
+                ],
+                spacing=8,
+            ),
+            bgcolor=SURFACE_2,
+            padding=ft.padding.symmetric(horizontal=12, vertical=8),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, grade_col)),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.MONETIZATION_ON_ROUNDED, color=ACCENT_PRIMARY, size=18),
+                                    ft.Text("Аудит комиссий и скрытых издержек брокера", size=14, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Container(
+                                        content=ft.Text("BROKER AUDIT", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                        bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+                                        padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                                        border_radius=4,
+                                        border=ft.border.all(1, ft.Colors.with_opacity(0.3, ACCENT_PRIMARY)),
+                                    ),
+                                ],
+                                spacing=8,
+                            ),
+                            header_badge,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Divider(color=BORDER_SUBTLE, height=8),
+                    ft.ResponsiveRow(controls=kpis, spacing=10, run_spacing=10),
+                    ft.Container(height=4),
+                    cost_chips,
+                    ft.Container(height=2),
+                    insight_bar,
+                ],
+                spacing=8,
+            ),
+            padding=16,
+            bgcolor=SURFACE_1,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -5674,6 +5907,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Liquidity Sweep Card: {ex_ls}")
             self.liquidity_sweep_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга матрицы ликвидности: {ex_ls}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.24 Обновление аудита издержек и комиссий брокера (Error Boundary)
+        try:
+            self.broker_cost_drag_container.content = self._build_broker_cost_drag_card(trades)
+        except Exception as ex_bcd:
+            logging.exception(f"[DashboardView] Error rendering Broker Cost Drag Card: {ex_bcd}")
+            self.broker_cost_drag_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга аудита издержек брокера: {ex_bcd}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

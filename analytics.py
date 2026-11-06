@@ -3901,6 +3901,147 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_broker_cost_drag_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Декомпозиция издержек брокера, комиссий и скрытого проскальзывания (TradeMetria Broker Cost Drag Engine).
+        Рассчитывает:
+        - Total Commission & Swap Fees ($)
+        - Estimated Slippage Drag ($)
+        - Total Broker Drag ($)
+        - Fee Drag Percentage (% of Gross Profit)
+        - Vampire Strategies: стратегии, принесшие валовую прибыль, но ставшие убыточными из-за брокерских комиссий.
+        - Execution Efficiency Grade: EXCELLENT (<12%), HEALTHY (12-22%), ELEVATED (22-35%), CRITICAL_BLEED (>35%).
+        """
+        if not trades:
+            return {
+                "total_trades": 0,
+                "total_commissions": 0.0,
+                "total_swap_fees": 0.0,
+                "total_slippage": 0.0,
+                "total_broker_drag": 0.0,
+                "gross_profit": 0.0,
+                "gross_loss": 0.0,
+                "gross_pnl": 0.0,
+                "net_pnl": 0.0,
+                "fee_drag_pct": 0.0,
+                "avg_cost_per_trade": 0.0,
+                "vampire_strategies_count": 0,
+                "vampire_strategies": [],
+                "efficiency_grade": "N/A",
+                "grade_color": "#94A3B8",
+                "actionable_insight": "Нет данных по комиссиям для анализа брокерских издержек",
+            }
+
+        total_comm = 0.0
+        total_swap = 0.0
+        total_slip = 0.0
+        gross_profit = 0.0
+        gross_loss = 0.0
+        strategy_pnl_map: Dict[str, Dict[str, float]] = {}
+
+        for t in trades:
+            comm = float(getattr(t, "commission", 0.0) or 0.0)
+            swap = float(getattr(t, "swap_fee", 0.0) or 0.0)
+            gpnl = float(getattr(t, "gross_pnl", 0.0) or 0.0)
+            npnl = float(getattr(t, "net_pnl", 0.0) or 0.0)
+
+            # Если gross_pnl не был явно предрассчитан
+            if gpnl == 0.0 and npnl != 0.0:
+                gpnl = npnl + comm + swap
+
+            slip = float(getattr(t, "slippage", 0.0) or 0.0)
+            notes = str(getattr(t, "notes", "") or "").lower()
+            if slip == 0.0 and "слип" in notes:
+                import re
+                m = re.search(r"(?:слип|slippage)[\s\:\=]*([0-9\.]+)", notes)
+                if m:
+                    try:
+                        slip = float(m.group(1))
+                    except Exception:
+                        slip = 0.0
+
+            total_comm += comm
+            total_swap += swap
+            total_slip += slip
+
+            if gpnl > 0:
+                gross_profit += gpnl
+            else:
+                gross_loss += abs(gpnl)
+
+            strat = str(getattr(t, "strategy_tag", "") or "General").strip() or "General"
+            if strat not in strategy_pnl_map:
+                strategy_pnl_map[strat] = {"gross_pnl": 0.0, "net_pnl": 0.0, "commissions": 0.0, "trades": 0}
+            strategy_pnl_map[strat]["gross_pnl"] += gpnl
+            strategy_pnl_map[strat]["net_pnl"] += npnl
+            strategy_pnl_map[strat]["commissions"] += (comm + swap + slip)
+            strategy_pnl_map[strat]["trades"] += 1
+
+        total_drag = round(total_comm + total_swap + total_slip, 2)
+        gross_pnl = round(gross_profit - gross_loss, 2)
+        net_pnl = round(sum(float(t.net_pnl or 0.0) for t in trades), 2)
+
+        if gross_profit > 0:
+            fee_drag_pct = round((total_drag / gross_profit) * 100, 1)
+        elif total_drag > 0:
+            fee_drag_pct = 100.0
+        else:
+            fee_drag_pct = 0.0
+
+        avg_cost_per_trade = round(total_drag / len(trades), 2) if trades else 0.0
+
+        vampire_strats = []
+        for s_name, s_data in strategy_pnl_map.items():
+            if s_data["gross_pnl"] > 0 and s_data["net_pnl"] <= 0 and s_data["commissions"] > 0:
+                vampire_strats.append({
+                    "strategy": s_name,
+                    "gross_pnl": round(s_data["gross_pnl"], 2),
+                    "net_pnl": round(s_data["net_pnl"], 2),
+                    "drag": round(s_data["commissions"], 2),
+                    "trades": s_data["trades"],
+                })
+
+        if fee_drag_pct < 12.0:
+            eff_grade = "EXCELLENT"
+            grade_color = "#10B981"
+            insight = f"Отличная структура издержек: комиссии и сборы забирают всего {fee_drag_pct}% валовой прибыли (${total_drag:,.2f})."
+        elif fee_drag_pct < 22.0:
+            eff_grade = "HEALTHY"
+            grade_color = "#38BDF8"
+            insight = f"Здоровый уровень брокерских затрат: издержки составляют {fee_drag_pct}% прибыли. Ср. расход: ${avg_cost_per_trade:,.2f} на сделку."
+        elif fee_drag_pct < 35.0:
+            eff_grade = "ELEVATED_CHURN"
+            grade_color = "#F59E0B"
+            insight = f"⚠️ Повышенный драг комиссий ({fee_drag_pct}% от прибыли, -${total_drag:,.2f}). Рекомендуется проверить частоту скальпинга и условия тарифа."
+        else:
+            eff_grade = "CRITICAL_BLEED"
+            grade_color = "#EF4444"
+            insight = f"🚨 Критическая утечка капитала: брокер съедает {fee_drag_pct}% вашей прибыли (-${total_drag:,.2f})! Брокер зарабатывает больше трейдера."
+
+        if vampire_strats:
+            top_vamp = vampire_strats[0]
+            insight += f" Обнаружен вампир-сетап «{top_vamp['strategy']}»: в вале +${top_vamp['gross_pnl']:,.2f}, но в чистом убытке -${abs(top_vamp['net_pnl']):,.2f} из-за сборов!"
+
+        return {
+            "total_trades": len(trades),
+            "total_commissions": round(total_comm, 2),
+            "total_swap_fees": round(total_swap, 2),
+            "total_slippage": round(total_slip, 2),
+            "total_broker_drag": total_drag,
+            "gross_profit": round(gross_profit, 2),
+            "gross_loss": round(gross_loss, 2),
+            "gross_pnl": gross_pnl,
+            "net_pnl": net_pnl,
+            "fee_drag_pct": fee_drag_pct,
+            "avg_cost_per_trade": avg_cost_per_trade,
+            "vampire_strategies_count": len(vampire_strats),
+            "vampire_strategies": vampire_strats,
+            "efficiency_grade": eff_grade,
+            "grade_color": grade_color,
+            "actionable_insight": insight,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

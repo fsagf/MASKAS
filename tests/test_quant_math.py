@@ -1296,6 +1296,46 @@ def test_liquidity_sweep_matrix():
     assert len(res["actionable_insight"]) > 10
 
 
+def test_broker_cost_drag_matrix():
+    """Verify TradeMetria broker cost, commissions, and vampire drag calculations."""
+    # 1. Empty trades edge case
+    empty_res = AnalyticsService.calculate_broker_cost_drag_matrix([])
+    assert empty_res["total_trades"] == 0
+    assert empty_res["fee_drag_pct"] == 0.0
+    assert empty_res["efficiency_grade"] == "N/A"
+
+    # 2. Trades with commissions, swap fees, and vampire setup
+    # Trade 1: Clean winner with light commission
+    t1 = Trade(direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0, strategy_tag="Swing")
+    t1.commission = 5.0
+    t1.swap_fee = 1.0
+    t1.gross_pnl = 200.0
+    t1.net_pnl = 194.0
+
+    # Trade 2: Vampire strategy (gross profit +30, commission -40 -> net pnl -10)
+    t2 = Trade(direction="LONG", entry_price=100.0, exit_price=103.0, volume=10.0, strategy_tag="Scalp Vampire")
+    t2.commission = 35.0
+    t2.swap_fee = 5.0
+    t2.gross_pnl = 30.0
+    t2.net_pnl = -10.0
+
+    trades = [t1, t2]
+    res = AnalyticsService.calculate_broker_cost_drag_matrix(trades)
+
+    assert res["total_trades"] == 2
+    assert res["total_commissions"] == 40.0
+    assert res["total_swap_fees"] == 6.0
+    assert res["total_broker_drag"] == 46.0
+    assert res["gross_profit"] == 230.0
+    assert res["net_pnl"] == 184.0
+    assert res["fee_drag_pct"] == 20.0  # 46 / 230 * 100 = 20.0%
+    assert res["efficiency_grade"] == "HEALTHY"
+    assert res["vampire_strategies_count"] == 1
+    assert res["vampire_strategies"][0]["strategy"] == "Scalp Vampire"
+    assert "вампир-сетап" in res["actionable_insight"].lower()
+
+
+
 
 
 

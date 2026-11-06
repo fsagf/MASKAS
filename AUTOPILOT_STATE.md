@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 28 (Completed) -> Starting Iteration 29
-- **Current Phase:** Phase 1: Competitor R&D & Implementation (UI/UX Architecture Hub & Order Flow Analytics)
-- **Status:** All 59 Tests Green (100% Passing). Modular Analytics Hub with Category Tabs, Search Filter & TradeZella Liquidity Sweep Engine Deployed.
+- **Iteration:** 29 (Completed) -> Starting Iteration 30
+- **Current Phase:** Phase 1: Competitor R&D & Implementation (Broker Cost Drag Decomposition & Capital Churn)
+- **Status:** All 60 Tests Green (100% Passing). TradeMetria Commissions, Slippage & Broker Cost Drag Decomposition Engine Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -208,16 +208,23 @@
   - Computes Winrate Alpha (+% WR differential of sweep setups over naive entries), Absorption Efficiency % (% of sweep trades reacting with minimal adverse excursion MAE <= 0.5), Sweep Net PnL, and Optimal Order Flow Pattern.
   - Created `_build_liquidity_sweep_card` in `ui/views/dashboard.py` featuring 4 responsive KPI cards, liquidity edge badge, archetype breakdown chips, and actionable execution advice bar.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (59 tests):**
+- [x] **TradeMetria Commissions, Slippage & Broker Cost Drag Decomposition Engine (Iteration 29):**
+  - Implemented `AnalyticsService.calculate_broker_cost_drag_matrix(trades)`: models hidden execution friction, exchange fees, funding swaps, and slippage leakages.
+  - Computes Gross Profit, Gross Loss, Total Commissions Paid ($), Overnight Swaps, Slippage Drag ($), and Fee Drag % (ratio of broker costs to gross profits).
+  - Detects Vampire Strategies: strategies where Gross PnL is positive, but Net PnL is negative solely due to broker fees churn.
+  - Computes Execution Efficiency Grade: `EXCELLENT` (<12% drag), `HEALTHY` (12-22%), `ELEVATED_CHURN` (22-35%), and `CRITICAL_BLEED` (>35%).
+  - Created `_build_broker_cost_drag_card` in `ui/views/dashboard.py` featuring 4 responsive KPI cards, efficiency grade badge, cost breakdown chips (exchange fees, swap, slippage), and actionable capital preservation advice bar.
+  - Integrated into `DashboardView` Analytics Hub (`execution` & `all` categories) and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (60 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 32 tests (including Liquidity Sweep Matrix and all prior quant engines).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 33 tests (including Broker Cost Drag Matrix, Liquidity Sweep Matrix, and all prior quant engines).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Category Tabs navigation, search filtering, and Liquidity Sweep Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Category Tabs navigation, search filtering, Liquidity Sweep Card render, and Broker Cost Drag Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 29+)
-- [ ] **TradeMetria (Iteration 29):** Commissions, Slippage & Broker Cost Drag Decomposition Engine (`calculate_broker_cost_drag_matrix`).
+## Competitor Backlog (R&D for Iteration 30+)
 - [ ] **QuantConnect (Iteration 30):** Multi-Factor Alpha Attribution & Cross-Asset Beta Neutralizer (`calculate_multi_factor_alpha_attribution`).
+- [ ] **TraderSync:** Target Capture vs Stop Run Ratio & Exit Quality Efficiency Matrix.

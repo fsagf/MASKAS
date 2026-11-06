@@ -162,6 +162,11 @@ def test_dashboard_view_headless_render():
     assert sweep_card is not None
     assert dash.liquidity_sweep_container is not None
 
+    # Verify Broker cost drag and vampire audit card renders cleanly
+    cost_card = dash._build_broker_cost_drag_card(trades=[])
+    assert cost_card is not None
+    assert dash.broker_cost_drag_container is not None
+
     # Verify Analytics Hub modular tabs navigation and search
     assert hasattr(dash, "category_tabs_row")
     assert hasattr(dash, "category_modules_column")
