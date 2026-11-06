@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 6 (Completed) -> Starting Iteration 7
+- **Iteration:** 7 (Completed) -> Starting Iteration 8
 - **Current Phase:** Phase 4: Full Regression & Close Loop
-- **Status:** All 38 Tests Green (100% Passing). Trade Duration & Holding Time Performance Matrix Deployed.
+- **Status:** All 38 Tests Green (100% Passing). Linear-style Command Palette with Dynamic Strategy Filters & Ticker Search Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -57,21 +57,23 @@
   - Identifies optimal holding period bracket (`optimal_bracket`).
   - Created `_build_duration_analysis_card` in `ui/views/dashboard.py` with duration bracket cards, KPI progress bars, and optimal duration badge.
   - Integrated into `DashboardView` beneath the Strategy Leaderboard.
-- [x] **Monte Carlo Simulator:** 10,000 bootstrap simulations accounting for initial account balance and equity cone percentiles (5th, 50th, 95th).
-- [x] **Tilt & Psychology Engine:** Detects revenge trading (<10 min cooldown after loss), over-risking (>2x avg risk), and break-even violation patterns.
-- [x] **Wave AI Coach:** Rule-based quant trading coach diagnosing fee drag, MAE/MFE retention loss, risk discipline, and Kelly sizing.
-- [x] **High-Performance Local Server Runner:** `run_local_server.py` with multi-adapter IP detection, VPN warning, terminal ASCII QR-code, and 1-click `ЗАПУСК_СЕРВЕРА.bat`.
+- [x] **Linear-style Command Palette (Ctrl+K) & Dynamic Strategy Filters (Iteration 7):**
+  - Re-architected `CommandBar` with category selector pills (`Все`, `⚡ Действия`, `🏷️ Стратегии`, `📜 Сделки`).
+  - Dynamic discovery of active strategy tags from database trades (`Breakout`, `SMC Order Block`, `Pullback`, `Trend Following`, `Scalping`, `Range`).
+  - Added `strategy_<tag>` action: instantly switches to `JournalView`, populates search query with setup name, filters trades list, and presents modern snackbar feedback.
+  - Modernized `AppLayout` snackbar notifications to standard `page.overlay` pattern.
+  - Added Linear-style footer shortcut chips (`↵ Select`, `ESC Close`, `Ctrl+K Shortcut`).
+  - Added headless UI regression tests verifying category switching, search filtering, and Enter submission.
 - [x] **Total QA Suite (38 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 11 tests (including SQN, Sharpe/Sortino, Session Matrix, Time Heatmap, Kelly & Streaks, Strategy Leaderboard, Duration Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 11 tests.
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Duration Analysis card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including CommandBar Linear UX).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 7+)
-- [ ] **TraderSync / Linear:** Linear-style keyboard shortcut command palette (Ctrl+K) for instant trade lookup, filter by strategy, and modal triggers (Iteration 7 Target).
+## Competitor Backlog (R&D for Iteration 8+)
+- [ ] **TraderVue / TradeZella:** Asset Class & Symbol Concentration Risk Matrix (Crypto vs Forex vs Equities breakdown with volume, winrate, and drawdown exposure) (Iteration 8 Target).
 - [ ] **Edgewonk:** Emotional State & Psychology Matrix (tracking Discipline, Fear, Greed, FOMO impact on PnL).
-- [ ] **TraderVue:** Asset Class & Symbol Concentration Risk Matrix.

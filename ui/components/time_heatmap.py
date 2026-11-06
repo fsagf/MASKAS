@@ -260,3 +260,4 @@ class TimeHeatmap(ft.Container):
             ],
             spacing=8,
         )
+

@@ -600,6 +600,29 @@ class AppLayout(ft.Row):
             except Exception:
                 pass
 
+        elif action_code.startswith("strategy_"):
+            tag = action_code[len("strategy_"):]
+            self.switch_to_view(1)
+            self.journal_view.search_field.value = tag
+            self.journal_view.refresh()
+            try:
+                sb = ft.SnackBar(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.FILTER_LIST_ROUNDED, color="#F59E0B", size=18),
+                            ft.Text(f"Журнал отфильтрован по стратегии: '{tag}'", color=TEXT_PRIMARY, size=13),
+                        ],
+                        spacing=8,
+                    ),
+                    bgcolor=SURFACE_1,
+                    duration=3000,
+                )
+                self.page.overlay.append(sb)
+                sb.open = True
+                self.page.update()
+            except Exception:
+                pass
+
         elif action_code == "toggle_tilt":
             new_val = not self.dashboard_view.tilt_switch.value
             self.dashboard_view.tilt_switch.value = new_val
@@ -610,13 +633,23 @@ class AppLayout(ft.Row):
             trades = self.db.get_all_trades()
             export_path = Path("data") / "trades_export.csv"
             out_file = AnalyticsService.export_trades_to_csv(trades, str(export_path))
-            self.page.show_snack_bar(
-                ft.SnackBar(
-                    content=ft.Text(f"Успешно экспортировано {len(trades)} сделок в {out_file}", color=TEXT_PRIMARY),
+            try:
+                sb = ft.SnackBar(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.DOWNLOAD_DONE_ROUNDED, color=PROFIT, size=18),
+                            ft.Text(f"Успешно экспортировано {len(trades)} сделок в {out_file}", color=TEXT_PRIMARY, size=13),
+                        ],
+                        spacing=8,
+                    ),
                     bgcolor=SURFACE_1,
-                    
+                    duration=3000,
                 )
-            )
+                self.page.overlay.append(sb)
+                sb.open = True
+                self.page.update()
+            except Exception:
+                pass
 
         elif action_code == "import_csv":
             self.switch_to_view(1)
@@ -632,13 +665,23 @@ class AppLayout(ft.Row):
             self.db.clear_all_trades()
             self.db.seed_demo_data_if_empty()
             self._on_trade_data_changed()
-            self.page.show_snack_bar(
-                ft.SnackBar(
-                    content=ft.Text("База сброшена и наполнена реалистичными сделками.", color=TEXT_PRIMARY),
+            try:
+                sb = ft.SnackBar(
+                    content=ft.Row(
+                        [
+                            ft.Icon(ft.Icons.REFRESH_ROUNDED, color="#22D3EE", size=18),
+                            ft.Text("База сброшена и наполнена реалистичными сделками.", color=TEXT_PRIMARY, size=13),
+                        ],
+                        spacing=8,
+                    ),
                     bgcolor=SURFACE_1,
-                    
+                    duration=3000,
                 )
-            )
+                self.page.overlay.append(sb)
+                sb.open = True
+                self.page.update()
+            except Exception:
+                pass
 
     def _on_trade_data_changed(self) -> None:
         """Синхронное обновление всех экранов и счетчиков при изменении данных."""

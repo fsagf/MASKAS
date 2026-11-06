@@ -104,9 +104,24 @@ def test_modals_and_components_headless_render():
     assert am.content.height in (470, 490)
     assert am.content.content.scroll == ft.ScrollMode.ADAPTIVE
 
-    # 3. Command Bar (Ctrl+K palette)
-    cb = CommandBar(on_action_selected=lambda a: None, db_manager=mock_db)
+    # 3. Command Bar (Ctrl+K palette with Linear categories & strategy filters)
+    action_recorded = []
+    cb = CommandBar(on_action_selected=lambda a: action_recorded.append(a), db_manager=mock_db)
     assert cb is not None
+    assert hasattr(cb, "category_chips_row")
+    assert len(cb.CATEGORIES) == 4
+    assert hasattr(cb, "search_input")
+    assert cb.commands_listview is not None
+    # Test category switching
+    cb._select_category("strategies")
+    assert cb.current_category == "strategies"
+    # Test search filter
+    cb.search_input.value = "breakout"
+    cb._filter_commands()
+    # Test execute first command
+    cb._execute_first_command()
+    assert len(action_recorded) == 1
+    assert "breakout" in action_recorded[0].lower()
 
     # 4. PnL Calendar Widget
     cal = PnLCalendar(trades=[], on_date_selected=lambda d: None)
