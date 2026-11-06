@@ -137,6 +137,11 @@ def test_dashboard_view_headless_render():
     assert rolling_card is not None
     assert dash.rolling_edge_container is not None
 
+    # Verify Prop firm consistency radar card renders cleanly
+    prop_card = dash._build_prop_consistency_card(trades=[])
+    assert prop_card is not None
+    assert dash.prop_consistency_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

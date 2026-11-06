@@ -3228,6 +3228,134 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_prop_consistency_radar(
+        cls,
+        trades: List[Trade],
+        max_single_day_share_limit: float = 33.0,
+        max_single_trade_share_limit: float = 25.0,
+    ) -> Dict[str, Any]:
+        """
+        Радар консистентности и оценка готовности к проп-челленджам (FTMO / FundedNext Consistency Rule Engine).
+        Оценивает:
+        1. Single Trade Profit Concentration (доля лучшей сделки от валовой прибыли, лимит 25-30%)
+        2. Single Day Profit Concentration (доля лучшего торгового дня, лимит 33%)
+        3. Lot Size Uniformity & Variance (стабильность размера позиций)
+        4. Max Daily Drawdown Observed (просадка за один день)
+        5. Composite Consistency Score (0-100%) & Readiness Status.
+        """
+        if not trades:
+            return {
+                "consistency_score": 0.0,
+                "readiness_status": "NO_DATA",
+                "status_color": "#94A3B8",
+                "best_trade_share_pct": 0.0,
+                "best_day_share_pct": 0.0,
+                "lot_size_cv": 0.0,
+                "max_daily_loss": 0.0,
+                "trade_concentration_pass": True,
+                "day_concentration_pass": True,
+                "sizing_uniformity_pass": True,
+                "best_trade_pnl": 0.0,
+                "best_day_pnl": 0.0,
+                "total_gross_profit": 0.0,
+                "consistency_insight": "Нет закрытых сделок для оценки готовности к проп-челленджам",
+                "total_trades": 0,
+            }
+
+        pnls = [float(t.net_pnl or 0.0) for t in trades]
+        wins = [p for p in pnls if p > 0]
+        total_gross_profit = float(sum(wins))
+
+        best_trade_pnl = max(pnls) if pnls else 0.0
+
+        # Доля лучшей сделки
+        if total_gross_profit > 0 and best_trade_pnl > 0:
+            best_trade_share = round((best_trade_pnl / total_gross_profit) * 100.0, 1)
+        else:
+            best_trade_share = 0.0
+
+        # Группировка по дням
+        daily_pnl_map: Dict[str, float] = {}
+        for t in trades:
+            dt = t.closed_at or t.created_at
+            if isinstance(dt, str):
+                try:
+                    dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+                except Exception:
+                    dt = None
+            if not dt:
+                dt = datetime.now()
+            day_str = dt.strftime("%Y-%m-%d")
+            daily_pnl_map[day_str] = daily_pnl_map.get(day_str, 0.0) + float(t.net_pnl or 0.0)
+
+        daily_pnls = list(daily_pnl_map.values())
+        best_day_pnl = max(daily_pnls) if daily_pnls else 0.0
+        worst_day_pnl = min(daily_pnls) if daily_pnls else 0.0
+        max_daily_loss = round(abs(min(0.0, worst_day_pnl)), 2)
+
+        if total_gross_profit > 0 and best_day_pnl > 0:
+            best_day_share = round((best_day_pnl / total_gross_profit) * 100.0, 1)
+        else:
+            best_day_share = 0.0
+
+        # Оценка вариации сайзинга (объема)
+        volumes = [float(getattr(t, "volume", 0.0) or 0.0) for t in trades if float(getattr(t, "volume", 0.0) or 0.0) > 0]
+        if len(volumes) >= 2 and np.mean(volumes) > 0:
+            lot_size_cv = round(float(np.std(volumes) / np.mean(volumes)), 2)
+        else:
+            lot_size_cv = 0.0
+
+        # Правила комплаенса
+        trade_conc_pass = best_trade_share <= max_single_trade_share_limit or total_gross_profit <= 0
+        day_conc_pass = best_day_share <= max_single_day_share_limit or total_gross_profit <= 0
+        sizing_pass = lot_size_cv <= 0.65
+
+        # Расчет общего Consistency Score (0 - 100)
+        trade_score = max(0.0, 30.0 * (1.0 - (best_trade_share / 100.0))) if best_trade_share > 0 else 25.0
+        day_score = max(0.0, 30.0 * (1.0 - (best_day_share / 100.0))) if best_day_share > 0 else 25.0
+        sizing_score = max(5.0, 20.0 * (1.0 - min(lot_size_cv, 1.0)))
+        winrate = (len(wins) / len(trades) * 100.0) if trades else 0.0
+        win_score = min(20.0, (winrate / 50.0) * 15.0 + (5.0 if sum(pnls) > 0 else 0.0))
+
+        consistency_score = round(min(100.0, max(0.0, trade_score + day_score + sizing_score + win_score)), 1)
+
+        # Статус готовности
+        if consistency_score >= 80.0 and trade_conc_pass and day_conc_pass:
+            status = "FUNDED_READY"
+            status_color = "#10B981"
+            insight = f"Готов к челленджу: Высокая консистентность ({consistency_score}%). Риски распределены равномерно, сайзинг стабилен"
+        elif consistency_score >= 65.0:
+            status = "QUALIFIED"
+            status_color = "#38BDF8"
+            insight = f"Хорошая стабильность ({consistency_score}%). Доля лучшего дня {best_day_share}% (норма <{max_single_day_share_limit}%)"
+        elif best_trade_share > max_single_trade_share_limit or best_day_share > max_single_day_share_limit:
+            status = "LOTTERY_DEPENDENCY"
+            status_color = "#F59E0B"
+            insight = f"⚠️ Риск дисквалификации: Прибыль сконцентрирована в одной сделке ({best_trade_share}%) или одном дне ({best_day_share}%)"
+        else:
+            status = "HIGH_VARIANCE"
+            status_color = "#EF4444"
+            insight = f"Недостаточная консистентность ({consistency_score}%). Высокая дисперсия результатов или частые просадки"
+
+        return {
+            "consistency_score": consistency_score,
+            "readiness_status": status,
+            "status_color": status_color,
+            "best_trade_share_pct": best_trade_share,
+            "best_day_share_pct": best_day_share,
+            "lot_size_cv": lot_size_cv,
+            "max_daily_loss": max_daily_loss,
+            "trade_concentration_pass": trade_conc_pass,
+            "day_concentration_pass": day_conc_pass,
+            "sizing_uniformity_pass": sizing_pass,
+            "best_trade_pnl": round(best_trade_pnl, 2),
+            "best_day_pnl": round(best_day_pnl, 2),
+            "total_gross_profit": round(total_gross_profit, 2),
+            "consistency_insight": insight,
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

@@ -1129,6 +1129,44 @@ def test_rolling_edge_matrix():
     assert "Внимание" in mat_dec["edge_insight"]
 
 
+def test_prop_consistency_radar():
+    """Verify prop firm consistency rule scoring (single trade/day profit concentration, lot size variance)."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_prop_consistency_radar([])
+    assert empty_mat["consistency_score"] == 0.0
+    assert empty_mat["readiness_status"] == "NO_DATA"
+    assert empty_mat["total_trades"] == 0
+
+    now = datetime.datetime.now()
+    # 2. Well-distributed trades (pass consistency)
+    trades_consistent = [
+        Trade(direction="LONG", entry_price=100.0, exit_price=120.0, volume=1.0, closed_at=now - datetime.timedelta(days=5)),
+        Trade(direction="LONG", entry_price=100.0, exit_price=125.0, volume=1.0, closed_at=now - datetime.timedelta(days=4)),
+        Trade(direction="LONG", entry_price=100.0, exit_price=118.0, volume=1.0, closed_at=now - datetime.timedelta(days=3)),
+        Trade(direction="LONG", entry_price=100.0, exit_price=122.0, volume=1.0, closed_at=now - datetime.timedelta(days=2)),
+        Trade(direction="LONG", entry_price=100.0, exit_price=115.0, volume=1.0, closed_at=now - datetime.timedelta(days=1)),
+    ]
+    mat_cons = AnalyticsService.calculate_prop_consistency_radar(trades_consistent)
+    assert mat_cons["readiness_status"] == "FUNDED_READY"
+    assert mat_cons["trade_concentration_pass"] is True
+    assert mat_cons["day_concentration_pass"] is True
+    assert mat_cons["sizing_uniformity_pass"] is True
+    assert mat_cons["consistency_score"] >= 80.0
+
+    # 3. Lottery Trade concentration (single outlier trade > 50% of profit)
+    trades_lottery = [
+        Trade(direction="LONG", entry_price=100.0, exit_price=200.0, volume=10.0, closed_at=now - datetime.timedelta(days=5)),
+        Trade(direction="LONG", entry_price=100.0, exit_price=105.0, volume=1.0, closed_at=now - datetime.timedelta(days=4)),
+        Trade(direction="LONG", entry_price=100.0, exit_price=104.0, volume=1.0, closed_at=now - datetime.timedelta(days=3)),
+    ]
+    mat_lottery = AnalyticsService.calculate_prop_consistency_radar(trades_lottery)
+    assert mat_lottery["best_trade_share_pct"] > 90.0
+    assert mat_lottery["trade_concentration_pass"] is False
+    assert mat_lottery["readiness_status"] == "LOTTERY_DEPENDENCY"
+    assert "Риск дисквалификации" in mat_lottery["consistency_insight"]
+
+
+
 
 
 

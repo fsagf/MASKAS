@@ -134,6 +134,7 @@ class DashboardView(ft.Container):
         self.setup_grading_container = ft.Container()
         self.tag_attribution_container = ft.Container()
         self.rolling_edge_container = ft.Container()
+        self.prop_consistency_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -313,6 +314,8 @@ class DashboardView(ft.Container):
                 self.tag_attribution_container,
                 ft.Container(height=4),
                 self.rolling_edge_container,
+                ft.Container(height=4),
+                self.prop_consistency_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -3863,6 +3866,202 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_prop_consistency_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный радар консистентности и оценка готовности к проп-челленджам (Prop Firm Consistency Radar).
+        """
+        matrix = AnalyticsService.calculate_prop_consistency_radar(trades)
+        score = matrix["consistency_score"]
+        status = matrix["readiness_status"]
+        status_color = matrix["status_color"]
+        insight = matrix["consistency_insight"]
+
+        status_labels = {
+            "FUNDED_READY": "ГОТОВ К ЧЕЛЛЕНДЖУ (FUNDED READY)",
+            "QUALIFIED": "КВАЛИФИЦИРОВАН (QUALIFIED)",
+            "LOTTERY_DEPENDENCY": "РИСК: СЛУЧАЙНЫЙ ВЫБРОС",
+            "HIGH_VARIANCE": "ВЫСОКАЯ ДИСПЕРСИЯ",
+            "NO_DATA": "НЕТ ДАННЫХ",
+        }
+        status_text = status_labels.get(status, status)
+
+        header_badge = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.VERIFIED_ROUNDED if status in ("FUNDED_READY", "QUALIFIED") else ft.Icons.SHIELD_ROUNDED,
+                        size=13,
+                        color=status_color,
+                    ),
+                    ft.Text(f"{status_text} • {score}%", size=10, weight=ft.FontWeight.BOLD, color=status_color, font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, status_color),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.35, status_color)),
+        )
+
+        kpis = [
+            # 1. Overall Consistency Score
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Consistency Score", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text("ЦЕЛЬ >= 80%", size=9, weight=ft.FontWeight.BOLD, color=status_color, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, status_color),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{score}%", size=18, weight=ft.FontWeight.BOLD, color=status_color, font_family=FONT_MONO),
+                        ft.ProgressBar(
+                            value=score / 100.0,
+                            color=status_color,
+                            bgcolor=SURFACE_1,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 2. Single Day Profit Share
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Доля лучшего дня", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text("PASS" if matrix["day_concentration_pass"] else "FAIL", size=9, weight=ft.FontWeight.BOLD, color=PROFIT if matrix["day_concentration_pass"] else LOSS, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, PROFIT if matrix["day_concentration_pass"] else LOSS),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{matrix['best_day_share_pct']}%", size=18, weight=ft.FontWeight.BOLD, color=PROFIT if matrix["day_concentration_pass"] else LOSS, font_family=FONT_MONO),
+                        ft.Text(f"Лимит FTMO: <33% • +${matrix['best_day_pnl']:,.2f}", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 3. Single Trade Profit Share
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Доля лучшей сделки", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text("PASS" if matrix["trade_concentration_pass"] else "FAIL", size=9, weight=ft.FontWeight.BOLD, color=PROFIT if matrix["trade_concentration_pass"] else LOSS, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, PROFIT if matrix["trade_concentration_pass"] else LOSS),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{matrix['best_trade_share_pct']}%", size=18, weight=ft.FontWeight.BOLD, color=PROFIT if matrix["trade_concentration_pass"] else LOSS, font_family=FONT_MONO),
+                        ft.Text(f"Лимит: <25% • +${matrix['best_trade_pnl']:,.2f}", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 4. Sizing Uniformity & Daily DD
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Стабильность сайзинга", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text("СТАБИЛЕН" if matrix["sizing_uniformity_pass"] else "НЕСТАБИЛЕН", size=9, weight=ft.FontWeight.BOLD, color=PROFIT if matrix["sizing_uniformity_pass"] else WARNING_TILT, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, PROFIT if matrix["sizing_uniformity_pass"] else WARNING_TILT),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"CV {matrix['lot_size_cv']:.2f}", size=18, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                        ft.Text(f"Макс. дневной убыток: -${matrix['max_daily_loss']:,.2f}", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+        ]
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.SHIELD_ROUNDED, color="#10B981", size=18),
+                                    ft.Text("Готовность к проп-челленджам и радар консистентности", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Prop Firm Consistency Radar)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_badge,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=kpis, spacing=10, run_spacing=10),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.SECURITY_ROUNDED if status in ("FUNDED_READY", "QUALIFIED") else ft.Icons.WARNING_ROUNDED, size=13, color=status_color),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, ft.Colors.with_opacity(0.35, status_color) if status in ("LOTTERY_DEPENDENCY", "HIGH_VARIANCE") else BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -4515,6 +4714,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Rolling Edge Matrix: {ex_roll}")
             self.rolling_edge_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга Rolling Edge матрицы: {ex_roll}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.19 Обновление радара готовности к проп-челленджам (Error Boundary)
+        try:
+            self.prop_consistency_container.content = self._build_prop_consistency_card(trades)
+        except Exception as ex_prop:
+            logging.exception(f"[DashboardView] Error rendering Prop Consistency Radar: {ex_prop}")
+            self.prop_consistency_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга радара консистентности: {ex_prop}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

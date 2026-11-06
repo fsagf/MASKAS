@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 23 (Completed) -> Starting Iteration 24
+- **Iteration:** 24 (Completed) -> Starting Iteration 25
 - **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 54 Tests Green (100% Passing). Rolling 30D Edge Momentum & Decay Engine Deployed.
+- **Status:** All 55 Tests Green (100% Passing). Prop Firm Consistency Radar & Challenge Readiness Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -163,17 +163,23 @@
   - Categorizes edge health: `EXPANDING_EDGE` (Sharpe expansion & positive WR momentum), `STABLE_EDGE`, and `DECAYING_EDGE` (warning trigger with proactive risk reduction advice).
   - Created `_build_rolling_edge_card` in `ui/views/dashboard.py` featuring 4 responsive KPI cards, dynamic delta badges, rolling winrate progress bar, and decay alert insight bar.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (54 tests):**
+- [x] **Prop Firm Consistency Radar & Challenge Readiness Engine (Iteration 24):**
+  - Implemented `AnalyticsService.calculate_prop_consistency_radar(trades)`: models strict prop firm consistency rules (FTMO, FundedNext, The Funded Trader).
+  - Evaluates Single Trade Profit Concentration (limit <25%), Single Day Profit Concentration (limit <33%), Lot Size Uniformity & Coefficient of Variation, and Max Daily Loss observed.
+  - Computes Composite Consistency Score (0-100%) and categorizes readiness: `FUNDED_READY` (Score >= 80%), `QUALIFIED` (65-79%), `LOTTERY_DEPENDENCY` (flags lottery-trade outlier risks), and `HIGH_VARIANCE`.
+  - Created `_build_prop_consistency_card` in `ui/views/dashboard.py` featuring 4 responsive KPI cards, pass/fail status chips, progress bars, and actionable challenge readiness insight bar.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (55 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 27 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix, Tag Attribution Matrix, Rolling Edge Decay Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 28 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix, Tag Attribution Matrix, Rolling Edge Decay Matrix, Prop Consistency Radar).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Rolling Edge Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Prop Consistency Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 24+)
-- [ ] **FTMO / TradeZella:** Consistency Rule & Prop Firm Challenge Readiness Radar.
+## Competitor Backlog (R&D for Iteration 25+)
 - [ ] **Edgewonk:** Optimal Stop Loss & Profit Target Placement Efficiency Curve.
-- [ ] **QuantConnect:** Alpha Factor Information Coefficient (IC) & Predictive Decay Matrix.
+- [ ] **QuantConnect / TradeMetria:** Alpha Factor Information Coefficient (IC) & Predictive Edge Persistence Matrix.
+- [ ] **TraderSync:** Trade Management Efficiency & Trailing Stop Alpha Drag Matrix.
