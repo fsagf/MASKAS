@@ -42,6 +42,7 @@ def test_dashboard_view_headless_render():
     assert hasattr(dash, "duration_analysis_container")
     assert hasattr(dash, "asset_allocation_container")
     assert hasattr(dash, "psychology_matrix_container")
+    assert hasattr(dash, "drawdown_recovery_container")
     assert hasattr(dash, "time_heatmap")
     assert hasattr(dash, "pnl_calendar")
     assert hasattr(dash, "tilt_switch")
@@ -66,6 +67,10 @@ def test_dashboard_view_headless_render():
     # Verify psychology matrix card renders cleanly
     psy_card = dash._build_psychology_matrix_card(trades=[])
     assert psy_card is not None
+
+    # Verify drawdown recovery card renders cleanly
+    dd_card = dash._build_drawdown_recovery_card(trades=[])
+    assert dd_card is not None
 
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None

@@ -597,6 +597,46 @@ def test_psychology_matrix():
     assert len(psy_mat["reasons_breakdown"]) == 2
 
 
+def test_drawdown_recovery_matrix():
+    """Verify TraderSync-style drawdown calculation, peak-to-valley tracking, and recovery factor."""
+    # 1. Empty trades
+    empty_dd = AnalyticsService.calculate_drawdown_recovery_matrix([])
+    assert empty_dd["max_drawdown_amount"] == 0.0
+    assert empty_dd["recovery_factor"] == 0.0
+    assert empty_dd["ulcer_index"] == 0.0
+
+    # 2. Sequential trades
+    now = datetime.datetime(2026, 3, 1, 10, 0, 0)
+    # T1: +1000 (Peak = 11000)
+    t1 = Trade(direction="LONG", entry_price=100.0, exit_price=110.0, volume=100.0, closed_at=now + datetime.timedelta(hours=1))
+    # T2: -400 (Equity = 10600, DD = 400)
+    t2 = Trade(direction="LONG", entry_price=100.0, exit_price=96.0, volume=100.0, closed_at=now + datetime.timedelta(hours=2))
+    # T3: -600 (Equity = 10000, DD = 1000, Valley!)
+    t3 = Trade(direction="LONG", entry_price=100.0, exit_price=94.0, volume=100.0, closed_at=now + datetime.timedelta(hours=3))
+    # T4: +1500 (Equity = 11500, New Peak = 11500, Recovery!)
+    t4 = Trade(direction="LONG", entry_price=100.0, exit_price=115.0, volume=100.0, closed_at=now + datetime.timedelta(hours=4))
+    # T5: -300 (Equity = 11200, Current DD = 300)
+    t5 = Trade(direction="LONG", entry_price=100.0, exit_price=97.0, volume=100.0, closed_at=now + datetime.timedelta(hours=5))
+
+    trades = [t1, t2, t3, t4, t5]
+    dd_mat = AnalyticsService.calculate_drawdown_recovery_matrix(trades, initial_balance=10000.0)
+
+    assert dd_mat["max_drawdown_amount"] == 1000.0
+    assert dd_mat["max_drawdown_pct"] == pytest.approx(9.1, abs=0.1)
+    assert dd_mat["net_pnl"] == 1200.0
+    assert dd_mat["recovery_factor"] == pytest.approx(1.2, abs=0.05)
+    assert dd_mat["peak_to_valley_trades"] == 2
+    assert dd_mat["current_drawdown_amount"] == 300.0
+    assert dd_mat["ulcer_index"] > 0.0
+
+    # 3. Verify DashboardMetrics population
+    metrics = AnalyticsService.calculate_metrics(trades)
+    assert metrics.max_drawdown_amount == 1000.0
+    assert metrics.recovery_factor == pytest.approx(1.2, abs=0.05)
+    assert metrics.ulcer_index > 0.0
+
+
+
 
 
 

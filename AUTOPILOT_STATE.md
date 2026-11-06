@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 9 (Completed) -> Starting Iteration 10
+- **Iteration:** 10 (Completed) -> Starting Iteration 11
 - **Current Phase:** Phase 4: Full Regression & Close Loop
-- **Status:** All 40 Tests Green (100% Passing). Edgewonk Emotional State & Discipline Audit Matrix Deployed.
+- **Status:** All 41 Tests Green (100% Passing). TraderSync Drawdown & Recovery Factor Engine Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -72,21 +72,26 @@
   - Created `_build_asset_allocation_card` in `ui/views/dashboard.py` with 4 asset class KPI cards, volume progress bars, risk badges, and top symbol pills.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
 - [x] **Edgewonk-style Psychology Engine & Discipline Audit (Iteration 9):**
-  - Implemented `AnalyticsService.calculate_psychology_matrix(trades)`: computes `Discipline Score %` (ratio of planned/clean trades to total), `Disciplined Net PnL` vs `Actual Net PnL`, and `Tilt Drag Amount ($)` lost to emotional mistakes.
+  - Implemented `AnalyticsService.calculate_psychology_matrix(trades)`: computes `Discipline Score %`, `Disciplined Net PnL` vs `Actual Net PnL`, and `Tilt Drag Amount ($)`.
   - Categorizes psychological errors: `Revenge Trading`, `FOMO`, `Over-Risking (>2x)`, `Checklist Violations`, and `Impulsive Entries`.
   - Detects Primary Emotional Leak causing highest dollar damage.
   - Created `_build_psychology_matrix_card` in `ui/views/dashboard.py` with Discipline Score progress card, Pure Edge vs Actual Net PnL comparator, Primary Leak warning badge, and breakdown pills.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (40 tests):**
+- [x] **Drawdown & Recovery Factor Engine (Iteration 10):**
+  - Extended `DashboardMetrics` with `max_drawdown_amount`, `max_drawdown_pct`, `recovery_factor`, and `ulcer_index`.
+  - Implemented `AnalyticsService.calculate_drawdown_recovery_matrix(trades, initial_balance)`: computes peak equity, maximum drawdown dollar and %, current drawdown from ATH, Recovery Factor (`Net PnL / Max DD`), Peak-to-Valley trade duration, and Ulcer Index (stress volatility).
+  - Created `_build_drawdown_recovery_card` in `ui/views/dashboard.py` with 4 KPI summary cards (Max DD, Recovery Factor grade, Ulcer Index stress rating, and Peak-to-Valley trades) plus live ATH/Underwater status badge.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (41 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 13 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 14 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Psychology Matrix card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Drawdown Recovery card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 10+)
-- [ ] **TraderSync:** Drawdown & Recovery Factor Engine (Maximum Drawdown %, Peak-to-Valley Duration, Recovery Factor, and Ulcer Index).
-- [ ] **TradeZella:** Interactive MAE / MFE Scatter Plot (Maximum Adverse vs Favorable Excursion retention efficiency).
+## Competitor Backlog (R&D for Iteration 11+)
+- [ ] **TradeZella:** Interactive MAE / MFE Execution Efficiency Scatter Plot & Edge Excursion Matrix (Iteration 11 Target).
+- [ ] **TraderSync:** Best / Worst Day of Month & Optimal Risk-per-Trade sizing curve.

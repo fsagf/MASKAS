@@ -120,6 +120,7 @@ class DashboardView(ft.Container):
         self.duration_analysis_container = ft.Container()
         self.asset_allocation_container = ft.Container()
         self.psychology_matrix_container = ft.Container()
+        self.drawdown_recovery_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -271,6 +272,8 @@ class DashboardView(ft.Container):
                 self.asset_allocation_container,
                 ft.Container(height=4),
                 self.psychology_matrix_container,
+                ft.Container(height=4),
+                self.drawdown_recovery_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -1459,6 +1462,189 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_drawdown_recovery_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный анализ просадок и устойчивости портфеля (TraderSync Drawdown & Recovery Factor).
+        """
+        matrix = AnalyticsService.calculate_drawdown_recovery_matrix(trades)
+        max_dd_amt = matrix["max_drawdown_amount"]
+        max_dd_pct = matrix["max_drawdown_pct"]
+        curr_dd_pct = matrix["current_drawdown_pct"]
+        rf = matrix["recovery_factor"]
+        ui = matrix["ulcer_index"]
+        p2v = matrix["peak_to_valley_trades"]
+
+        if rf >= 3.0:
+            rf_grade = "Отличный (>3.0)"
+            rf_col = PROFIT
+        elif rf >= 1.5:
+            rf_grade = "Умеренный (1.5-3.0)"
+            rf_col = "#F59E0B"
+        else:
+            rf_grade = "Слабый (<1.5)"
+            rf_col = LOSS if rf < 1.0 else TEXT_MUTED
+
+        if ui < 3.0:
+            ui_grade = "Низкий стресс (Плавный рост)"
+            ui_col = PROFIT
+        elif ui < 7.0:
+            ui_grade = "Умеренный стресс"
+            ui_col = "#F59E0B"
+        else:
+            ui_grade = "Высокий стресс (Глубокие ямы)"
+            ui_col = LOSS
+
+        kpi_boxes = [
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Максимальная просадка", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Row(
+                            controls=[
+                                ft.Text(f"-${max_dd_amt:,.2f}", size=15, weight=ft.FontWeight.BOLD, color=LOSS if max_dd_amt > 0 else PROFIT, font_family=FONT_MONO),
+                                ft.Container(
+                                    content=ft.Text(f"-{max_dd_pct:.1f}%", size=10, weight=ft.FontWeight.BOLD, color=LOSS if max_dd_pct > 0 else PROFIT, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, LOSS if max_dd_pct > 0 else PROFIT),
+                                    padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                                    border_radius=3,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        ft.Text(
+                            f"Пик: ${matrix['peak_equity']:,.2f} -> Дно: ${matrix['peak_equity'] - max_dd_amt:,.2f}",
+                            size=10,
+                            color=TEXT_MUTED,
+                            font_family=FONT_MONO,
+                        ),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Фактор восстановления (RF)", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Row(
+                            controls=[
+                                ft.Text(f"{rf:.2f}", size=15, weight=ft.FontWeight.BOLD, color=rf_col, font_family=FONT_MONO),
+                                ft.Text("Net PnL / Max DD", size=9, color=TEXT_MUTED, font_family=FONT_MONO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        ft.Text(rf_grade, size=10, color=rf_col, font_family=FONT_FAMILY),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Индекс язвы (Ulcer Index)", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Row(
+                            controls=[
+                                ft.Text(f"{ui:.2f}", size=15, weight=ft.FontWeight.BOLD, color=ui_col, font_family=FONT_MONO),
+                                ft.Icon(ft.Icons.SPA_ROUNDED if ui < 3.0 else ft.Icons.HEALTH_AND_SAFETY_ROUNDED, size=15, color=ui_col),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        ft.Text(ui_grade, size=10, color=ui_col, font_family=FONT_FAMILY),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Длительность просадки", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Row(
+                            controls=[
+                                ft.Text(f"{p2v} сделок", size=15, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                                ft.Text("Peak-to-Valley", size=9, color=TEXT_MUTED, font_family=FONT_MONO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        ft.Text("Количество трейдов под пиком ATH", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+        ]
+
+        is_ath = (curr_dd_pct == 0.0)
+        status_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.ROCKET_LAUNCH_ROUNDED if is_ath else ft.Icons.TRENDING_DOWN_ROUNDED, size=13, color=PROFIT if is_ath else LOSS),
+                    ft.Text(
+                        "Капитал на пике (ATH) 🚀" if is_ath else f"Текущая просадка: -{curr_dd_pct:.1f}% (-${matrix['current_drawdown_amount']:,.2f})",
+                        size=10,
+                        weight=ft.FontWeight.BOLD,
+                        color=PROFIT if is_ath else LOSS,
+                        font_family=FONT_MONO,
+                    ),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, PROFIT if is_ath else LOSS),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, PROFIT if is_ath else LOSS)),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.WATER_DROP_ROUNDED, color="#38BDF8", size=18),
+                                    ft.Text("Анализ просадки и устойчивости", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(TraderSync Drawdown & Recovery)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            status_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=kpi_boxes, spacing=10, run_spacing=10),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -1971,6 +2157,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Psychology Matrix: {ex_psy}")
             self.psychology_matrix_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга аудита психологии: {ex_psy}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.5 Обновление анализа просадки и устойчивости (Error Boundary)
+        try:
+            self.drawdown_recovery_container.content = self._build_drawdown_recovery_card(trades)
+        except Exception as ex_dd:
+            logging.exception(f"[DashboardView] Error rendering Drawdown Recovery: {ex_dd}")
+            self.drawdown_recovery_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга анализа просадки: {ex_dd}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

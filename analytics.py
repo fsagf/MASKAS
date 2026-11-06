@@ -58,6 +58,10 @@ class DashboardMetrics:
     max_win_streak: int = 0           # Максимальная серия побед подряд
     max_loss_streak: int = 0          # Максимальная серия поражений подряд
     current_streak: int = 0           # Текущая серия (+N побед или -N убытков)
+    max_drawdown_amount: float = 0.0   # Максимальная просадка ($)
+    max_drawdown_pct: float = 0.0      # Максимальная просадка (%)
+    recovery_factor: float = 0.0       # Recovery Factor = Net PnL / Max Drawdown
+    ulcer_index: float = 0.0           # Ulcer Index (глубина и длительность просадки)
 
 
 TradingMetrics = DashboardMetrics
@@ -416,6 +420,9 @@ class AnalyticsService:
                 cur_w = 0
                 cur_l = 0
 
+        # 11. Drawdown, Recovery Factor & Ulcer Index Engine
+        dd_mat = cls.calculate_drawdown_recovery_matrix(sorted_asc)
+
         metrics_obj = DashboardMetrics(
             total_trades=total,
             winning_trades=len(wins),
@@ -448,6 +455,10 @@ class AnalyticsService:
             max_win_streak=max_w_streak,
             max_loss_streak=max_l_streak,
             current_streak=curr_streak,
+            max_drawdown_amount=dd_mat["max_drawdown_amount"],
+            max_drawdown_pct=dd_mat["max_drawdown_pct"],
+            recovery_factor=dd_mat["recovery_factor"],
+            ulcer_index=dd_mat["ulcer_index"],
         )
 
         # Validation Pipeline: проверка и замена NaN/Inf на 0.0
@@ -1316,6 +1327,92 @@ class AnalyticsService:
             "tilt_drag_amount": tilt_drag,
             "primary_emotional_leak": primary_leak,
             "reasons_breakdown": reasons_list,
+        }
+
+    @classmethod
+    def calculate_drawdown_recovery_matrix(
+        cls,
+        trades: List[Trade],
+        initial_balance: float = 10000.0,
+    ) -> Dict[str, Any]:
+        """
+        Квантовый анализ просадок, фактора восстановления и индекса язвы (TraderSync / Portfolio Visualizer).
+        Рассчитывает Max Drawdown ($ и %), Recovery Factor (Net PnL / Max DD), Ulcer Index и длительность выхода из просадки.
+        """
+        if not trades:
+            return {
+                "max_drawdown_amount": 0.0,
+                "max_drawdown_pct": 0.0,
+                "current_drawdown_amount": 0.0,
+                "current_drawdown_pct": 0.0,
+                "recovery_factor": 0.0,
+                "ulcer_index": 0.0,
+                "peak_to_valley_trades": 0,
+                "net_pnl": 0.0,
+                "peak_equity": initial_balance,
+                "final_equity": initial_balance,
+            }
+
+        sorted_trades = sorted(
+            trades,
+            key=lambda t: (
+                t.closed_at or t.opened_at or getattr(t, "date", datetime.min),
+                t.id or 0,
+            ),
+        )
+
+        equity = float(initial_balance)
+        peak = float(initial_balance)
+        max_dd_amount = 0.0
+        max_dd_pct = 0.0
+        drawdown_pcts = []
+        current_streak_dd = 0
+        max_p2v_trades = 0
+
+        for t in sorted_trades:
+            p = float(t.net_pnl or 0.0)
+            equity += p
+            if equity > peak:
+                peak = equity
+                current_streak_dd = 0
+                drawdown_pcts.append(0.0)
+            else:
+                dd_amt = peak - equity
+                dd_pct = (dd_amt / peak) * 100.0 if peak > 0 else 0.0
+                drawdown_pcts.append(dd_pct)
+                current_streak_dd += 1
+                max_p2v_trades = max(max_p2v_trades, current_streak_dd)
+                if dd_amt > max_dd_amount:
+                    max_dd_amount = dd_amt
+                    max_dd_pct = dd_pct
+
+        net_pnl = float(equity - initial_balance)
+        if max_dd_amount > 0:
+            recovery_factor = round(net_pnl / max_dd_amount, 2)
+        elif net_pnl > 0:
+            recovery_factor = 99.9
+        else:
+            recovery_factor = 1.0
+
+        curr_dd_amt = round(max(0.0, peak - equity), 2)
+        curr_dd_pct = round((curr_dd_amt / peak) * 100.0, 1) if peak > 0 else 0.0
+
+        if drawdown_pcts:
+            ui = round(float(np.sqrt(np.mean([d ** 2 for d in drawdown_pcts]))), 2)
+        else:
+            ui = 0.0
+
+        return {
+            "max_drawdown_amount": round(max_dd_amount, 2),
+            "max_drawdown_pct": round(max_dd_pct, 1),
+            "current_drawdown_amount": curr_dd_amt,
+            "current_drawdown_pct": curr_dd_pct,
+            "recovery_factor": recovery_factor,
+            "ulcer_index": ui,
+            "peak_to_valley_trades": max_p2v_trades,
+            "net_pnl": round(net_pnl, 2),
+            "peak_equity": round(peak, 2),
+            "final_equity": round(equity, 2),
         }
 
     @classmethod
