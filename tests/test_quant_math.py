@@ -636,6 +636,38 @@ def test_drawdown_recovery_matrix():
     assert metrics.ulcer_index > 0.0
 
 
+def test_excursion_matrix():
+    """Verify TradeZella-style MAE/MFE execution quality, Edge Ratio, and left-on-table retention."""
+    # 1. Empty trades
+    empty_exc = AnalyticsService.calculate_excursion_matrix([])
+    assert empty_exc["total_trades"] == 0
+    assert empty_exc["edge_ratio"] == 0.0
+    assert empty_exc["edge_rating"] == "N/A"
+
+    # 2. Trades with explicit MAE/MFE prices
+    # T1: Long 100 -> exit 140 (PnL +400). MAE price = 98 (-2.0%), MFE price = 150 (+50.0%)
+    t1 = Trade(
+        direction="LONG", entry_price=100.0, exit_price=140.0, volume=10.0,
+        mae_price=98.0, mfe_price=150.0,
+    )
+    # T2: Long 100 -> exit 120 (PnL +200). MAE price = 96 (-4.0%), MFE price = 130 (+30.0%)
+    t2 = Trade(
+        direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0,
+        mae_price=96.0, mfe_price=130.0,
+    )
+
+    trades = [t1, t2]
+    exc = AnalyticsService.calculate_excursion_matrix(trades)
+
+    assert exc["total_trades"] == 2
+    assert exc["avg_mae_pct"] == pytest.approx(3.0, abs=0.1)
+    assert exc["avg_mfe_pct"] == pytest.approx(40.0, abs=0.1)
+    assert exc["edge_ratio"] > 5.0
+    assert "Превосходный" in exc["edge_rating"]
+    assert exc["avg_efficiency_pct"] > 0.0
+
+
+
 
 
 

@@ -121,6 +121,7 @@ class DashboardView(ft.Container):
         self.asset_allocation_container = ft.Container()
         self.psychology_matrix_container = ft.Container()
         self.drawdown_recovery_container = ft.Container()
+        self.excursion_matrix_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -274,6 +275,8 @@ class DashboardView(ft.Container):
                 self.psychology_matrix_container,
                 ft.Container(height=4),
                 self.drawdown_recovery_container,
+                ft.Container(height=4),
+                self.excursion_matrix_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -1645,6 +1648,180 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_excursion_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный анализ качества входов и выходов (TradeZella MAE / MFE Excursion Matrix).
+        """
+        matrix = AnalyticsService.calculate_excursion_matrix(trades)
+        ratio = matrix["edge_ratio"]
+        avg_mae = matrix["avg_mae_pct"]
+        avg_mfe = matrix["avg_mfe_pct"]
+        eff = matrix["avg_efficiency_pct"]
+        table_leak = matrix["left_on_table_amount"]
+        grade = matrix["edge_rating"]
+
+        ratio_col = PROFIT if ratio >= 2.0 else ("#F59E0B" if ratio >= 1.5 else LOSS)
+        eff_col = PROFIT if eff >= 60.0 else ("#F59E0B" if eff >= 40.0 else LOSS)
+
+        kpi_cards = [
+            # 1. Edge Ratio
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Edge Ratio (MFE / MAE)", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Row(
+                            controls=[
+                                ft.Text(f"{ratio:.2f}", size=15, weight=ft.FontWeight.BOLD, color=ratio_col, font_family=FONT_MONO),
+                                ft.Container(
+                                    content=ft.Text("MFE / |MAE|", size=9, color=TEXT_MUTED, font_family=FONT_MONO),
+                                    bgcolor=SURFACE_1,
+                                    padding=ft.padding.symmetric(horizontal=4, vertical=1),
+                                    border_radius=3,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        ft.Text(grade, size=10, color=ratio_col, font_family=FONT_FAMILY),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 2. Avg MFE
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Ср. MFE (Потенциал сделок)", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Row(
+                            controls=[
+                                ft.Text(f"+{avg_mfe:.2f}%", size=15, weight=ft.FontWeight.BOLD, color=PROFIT, font_family=FONT_MONO),
+                                ft.Icon(ft.Icons.TRENDING_UP_ROUNDED, size=15, color=PROFIT),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        ft.Text("Максимальный ход в сторону профита", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 3. Avg MAE
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Ср. MAE (Просадка в позиции)", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Row(
+                            controls=[
+                                ft.Text(f"-{avg_mae:.2f}%", size=15, weight=ft.FontWeight.BOLD, color=LOSS, font_family=FONT_MONO),
+                                ft.Icon(ft.Icons.TRENDING_DOWN_ROUNDED, size=15, color=LOSS),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        ft.Text("Максимальный откат против позиции", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 4. Retention Efficiency
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Text("КПД удержания (Retention)", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Text(f"{eff:.0f}%", size=11, weight=ft.FontWeight.BOLD, color=eff_col, font_family=FONT_MONO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.ProgressBar(
+                            value=eff / 100.0,
+                            color=eff_col,
+                            bgcolor=SURFACE_1,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                        ft.Text(
+                            f"Оставлено на столе: -${table_leak:,.2f}" if table_leak > 0 else "Оптимальная фиксация прибыли",
+                            size=10,
+                            color=LOSS if table_leak > 0 else PROFIT,
+                            font_family=FONT_MONO,
+                        ),
+                    ],
+                    spacing=5,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+        ]
+
+        header_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.SPEED_ROUNDED, size=13, color=ratio_col),
+                    ft.Text(
+                        f"Edge Ratio: {ratio:.2f}x",
+                        size=10,
+                        weight=ft.FontWeight.BOLD,
+                        color=ratio_col,
+                        font_family=FONT_MONO,
+                    ),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, ratio_col),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, ratio_col)),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.CALL_SPLIT_ROUNDED, color="#22D3EE", size=18),
+                                    ft.Text("Качество исполнения MAE / MFE", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(TradeZella Excursion Matrix)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=kpi_cards, spacing=10, run_spacing=10),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -2167,6 +2344,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Drawdown Recovery: {ex_dd}")
             self.drawdown_recovery_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга анализа просадки: {ex_dd}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.6 Обновление матрицы исполнения MAE / MFE (Error Boundary)
+        try:
+            self.excursion_matrix_container.content = self._build_excursion_card(trades)
+        except Exception as ex_exc:
+            logging.exception(f"[DashboardView] Error rendering Excursion Matrix: {ex_exc}")
+            self.excursion_matrix_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга матрицы экскурсий: {ex_exc}", color=ft.Colors.ERROR),
                 padding=12,
             )
 
