@@ -1203,6 +1203,31 @@ def test_order_placement_efficiency():
     assert mat_leak["optimal_sl_buffer_recommendation"] == "+25% (Расширить SL)"
 
 
+def test_factor_information_coefficient():
+    """Verify Factor Information Coefficient (Rank IC), Spearman correlation, and predictive alpha classification."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_factor_information_coefficient([])
+    assert empty_mat["factors"] == []
+    assert empty_mat["top_factor"] is None
+    assert empty_mat["total_trades"] == 0
+
+    # 2. Trades with distinct factor signals and outcomes
+    t1 = Trade(direction="LONG", entry_price=100.0, exit_price=160.0, stop_loss=80.0, take_profit=160.0, volume=10.0, notes="3x triple confluence")
+    t2 = Trade(direction="LONG", entry_price=100.0, exit_price=130.0, stop_loss=85.0, take_profit=130.0, volume=5.0, notes="h1 trend")
+    t3 = Trade(direction="LONG", entry_price=100.0, exit_price=80.0, stop_loss=70.0, take_profit=110.0, volume=2.0, notes="тильт вход fomo")
+
+    trades = [t1, t2, t3]
+    mat = AnalyticsService.calculate_factor_information_coefficient(trades)
+
+    assert mat["total_trades"] == 3
+    assert len(mat["factors"]) == 4
+    assert mat["top_factor"] is not None
+    assert mat["top_factor_ic"] >= 0.5
+    assert any(f["category"] in ("ELITE_ALPHA", "MODERATE_ALPHA") for f in mat["factors"])
+    assert len(mat["ic_insight"]) > 10
+
+
+
 
 
 

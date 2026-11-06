@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 25 (Completed) -> Starting Iteration 26
+- **Iteration:** 26 (Completed) -> Starting Iteration 27
 - **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 56 Tests Green (100% Passing). Stop Loss & Take Profit Placement Efficiency Engine Deployed.
+- **Status:** All 57 Tests Green (100% Passing). Alpha Factor Information Coefficient (IC) Engine Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -177,17 +177,24 @@
   - Computes Stop Loss Buffer Recommendation (+25% expansion recommendation when premature stops exceed 30% of losses).
   - Created `_build_order_placement_card` in `ui/views/dashboard.py` with 4 responsive KPI cards, placement grade badge (`A+`, `A`, `B`, `C`), capture progress bar, and actionable calibration insight bar.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (56 tests):**
+- [x] **Alpha Factor Information Coefficient (IC) & Predictive Edge Persistence Matrix (Iteration 26):**
+  - Implemented `AnalyticsService.calculate_factor_information_coefficient(trades)`: institutional quant factor audit calculating Spearman Rank Correlation (Rank IC) between pre-trade signals and realized Net PnL.
+  - Evaluates 4 key alphas: Planned Risk-to-Reward Ratio (RR), Position Sizing Conviction (Volume), Multi-Timeframe Trend Confluence, and Discipline & Compliance.
+  - Classifies factor quality: `ELITE_ALPHA` (IC >= 0.15), `MODERATE_ALPHA` (0.05 to 0.14), `NOISE_FACTOR` (-0.05 to 0.04), and `INVERSE_DRAG` (toxic factors < -0.05).
+  - Computes Factor Information Ratio (IR = `Mean(IC) / Std(IC)`).
+  - Created `_build_factor_ic_card` in `ui/views/dashboard.py` featuring 4 responsive factor cards with Rank IC indicators, factor descriptions, status ratings, and actionable quant alpha insight bar.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (57 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 29 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix, Tag Attribution Matrix, Rolling Edge Decay Matrix, Prop Consistency Radar, Order Placement Efficiency).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 30 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix, Tag Attribution Matrix, Rolling Edge Decay Matrix, Prop Consistency Radar, Order Placement Efficiency, Factor Information Coefficient).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Order Placement Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Factor IC Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 26+)
-- [ ] **QuantConnect / TradeMetria:** Alpha Factor Information Coefficient (IC) & Predictive Edge Persistence Matrix.
+## Competitor Backlog (R&D for Iteration 27+)
 - [ ] **TraderSync:** Trade Management Efficiency & Trailing Stop Alpha Drag Matrix.
 - [ ] **TradeZella:** Liquidity Sweep & Order Flow Footprint Imbalance Confluence Matrix.
+- [ ] **TradeMetria:** Commissions, Slippage & Broker Cost Drag Decomposition Engine.

@@ -136,6 +136,7 @@ class DashboardView(ft.Container):
         self.rolling_edge_container = ft.Container()
         self.prop_consistency_container = ft.Container()
         self.order_placement_container = ft.Container()
+        self.factor_ic_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -319,6 +320,8 @@ class DashboardView(ft.Container):
                 self.prop_consistency_container,
                 ft.Container(height=4),
                 self.order_placement_container,
+                ft.Container(height=4),
+                self.factor_ic_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -4251,6 +4254,124 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_factor_ic_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный квантовый аудит предсказательной силы факторов альфы (Factor Information Coefficient & Alpha Persistence).
+        """
+        matrix = AnalyticsService.calculate_factor_information_coefficient(trades)
+        factors = matrix["factors"]
+        top_f = matrix["top_factor"]
+        top_ic = matrix["top_factor_ic"]
+        factor_ir = matrix["factor_ir"]
+        insight = matrix["ic_insight"]
+
+        header_badge = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, size=13, color="#38BDF8"),
+                    ft.Text(f"Топ-фактор: {top_f or '—'} (IC {top_ic:+}) • Factor IR: {factor_ir}", size=10, weight=ft.FontWeight.BOLD, color="#38BDF8", font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, "#38BDF8"),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.35, "#38BDF8")),
+        )
+
+        cards = []
+        for f in factors:
+            ic_val = f["ic"]
+            ic_color = f["color"]
+            card_w = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Text(f["factor"], size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(f["rating"], size=9, weight=ft.FontWeight.BOLD, color=ic_color, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, ic_color),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f["description"], size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Row(
+                            controls=[
+                                ft.Text(f"Rank IC: {ic_val:+,.2f}", size=16, weight=ft.FontWeight.BOLD, color=ic_color, font_family=FONT_MONO),
+                                ft.Icon(
+                                    ft.Icons.TRENDING_UP_ROUNDED if ic_val > 0 else (ft.Icons.TRENDING_DOWN_ROUNDED if ic_val < 0 else ft.Icons.REMOVE_ROUNDED),
+                                    size=16,
+                                    color=ic_color,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.35, ic_color) if f["category"] in ("ELITE_ALPHA", "INVERSE_DRAG") else BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            )
+            cards.append(card_w)
+
+        if not cards:
+            cards.append(
+                ft.Container(
+                    content=ft.Text("Нет данных по сделкам для расчета ранговой корреляции факторов.", size=11, color=TEXT_MUTED),
+                    padding=10,
+                    col=12,
+                )
+            )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.QUERY_STATS_ROUNDED, color="#38BDF8", size=18),
+                                    ft.Text("Коэффициент предсказательной силы факторов", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Alpha Factor Information Coefficient)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_badge,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=cards, spacing=10, run_spacing=10),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.INSIGHTS_ROUNDED, size=13, color="#38BDF8"),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -4923,6 +5044,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Order Placement Card: {ex_op}")
             self.order_placement_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга эффективности ордеров: {ex_op}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.21 Обновление предсказательной силы факторов IC (Error Boundary)
+        try:
+            self.factor_ic_container.content = self._build_factor_ic_card(trades)
+        except Exception as ex_ic:
+            logging.exception(f"[DashboardView] Error rendering Factor IC Card: {ex_ic}")
+            self.factor_ic_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга предсказательной силы факторов: {ex_ic}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

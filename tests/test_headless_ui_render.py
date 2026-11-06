@@ -147,6 +147,11 @@ def test_dashboard_view_headless_render():
     assert order_card is not None
     assert dash.order_placement_container is not None
 
+    # Verify Factor information coefficient card renders cleanly
+    ic_card = dash._build_factor_ic_card(trades=[])
+    assert ic_card is not None
+    assert dash.factor_ic_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

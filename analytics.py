@@ -3460,6 +3460,148 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_factor_information_coefficient(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Квантовый аудит предсказательной силы факторов альфы (Factor Information Coefficient & Alpha Persistence).
+        Рассчитывает ранговую корреляцию Спирмена (Rank IC) между пре-трейд факторами и реализованным результатом (Net PnL):
+        1. Planned Risk-to-Reward Ratio (RR)
+        2. Position Sizing Conviction (Volume)
+        3. Multi-Timeframe Trend Confluence
+        4. Discipline & Compliance Score
+        Определяет элитные альфа-факторы (IC >= 0.15), шум (IC ~ 0) и токсичные факторы риска (IC < -0.05).
+        """
+        if not trades:
+            return {
+                "factors": [],
+                "top_factor": None,
+                "top_factor_ic": 0.0,
+                "mean_factor_ic": 0.0,
+                "factor_ir": 0.0,
+                "ic_insight": "Нет данных по сделкам для анализа коэффициента предсказательной силы факторов",
+                "total_trades": 0,
+            }
+
+        pnls = [float(t.net_pnl or 0.0) for t in trades]
+        cnt = len(trades)
+
+        def spearman_ic(x: List[float], y: List[float]) -> float:
+            if len(x) < 3:
+                return 0.0
+            x_arr = np.array(x, dtype=float)
+            y_arr = np.array(y, dtype=float)
+            if np.std(x_arr) < 1e-9 or np.std(y_arr) < 1e-9:
+                return 0.0
+            x_ranks = pd.Series(x_arr).rank()
+            y_ranks = pd.Series(y_arr).rank()
+            corr = x_ranks.corr(y_ranks)
+            return round(float(corr) if not np.isnan(corr) else 0.0, 2)
+
+        # 1. Planned R:R factor
+        rr_vals = []
+        for t in trades:
+            e = float(t.entry_price or 0.0)
+            sl = float(t.stop_loss or 0.0)
+            tp = float(t.take_profit or 0.0)
+            d = (t.direction or "LONG").upper()
+            if sl > 0 and tp > 0 and e > 0:
+                if d == "SHORT":
+                    risk = max(1e-4, sl - e)
+                    reward = max(0.0, e - tp)
+                else:
+                    risk = max(1e-4, e - sl)
+                    reward = max(0.0, tp - e)
+                rr_vals.append(min(10.0, max(0.5, reward / risk)))
+            else:
+                rr_vals.append(1.5)
+
+        # 2. Volume conviction factor
+        vol_vals = [float(getattr(t, "volume", 1.0) or 1.0) for t in trades]
+
+        # 3. MTF Confluence factor
+        mtf_vals = []
+        for t in trades:
+            n = str(getattr(t, "notes", "") or "").lower()
+            if any(k in n for k in ("3x", "три таймфрейма", "h4+h1+m15", "triple")):
+                mtf_vals.append(3.0)
+            elif any(k in n for k in ("trend", "тренд", "h1", "h4", "confluence")):
+                mtf_vals.append(2.0)
+            else:
+                mtf_vals.append(1.0)
+
+        # 4. Discipline factor
+        disc_vals = []
+        for t in trades:
+            n = str(getattr(t, "notes", "") or "").lower()
+            is_tilt = bool(getattr(t, "is_tilt", False))
+            if is_tilt or any(k in n for k in ("тильт", "fomo", "жадность", "нарушил")):
+                disc_vals.append(0.0)
+            else:
+                disc_vals.append(1.0)
+
+        factor_definitions = [
+            ("Planned R:R", rr_vals, "Планируемый риск/прибыль", "SAFETY_CHECK"),
+            ("Sizing Conviction", vol_vals, "Размер позиции (объем)", "BAR_CHART"),
+            ("MTF Confluence", mtf_vals, "Согласованность таймфреймов", "LAYERS"),
+            ("Discipline Compliance", disc_vals, "Соблюдение торговых правил", "VERIFIED"),
+        ]
+
+        factor_results = []
+        ic_list = []
+
+        for f_name, f_vals, f_desc, f_icon in factor_definitions:
+            ic = spearman_ic(f_vals, pnls)
+            ic_list.append(ic)
+
+            if ic >= 0.15:
+                cat = "ELITE_ALPHA"
+                col = "#10B981"
+                rating_text = "Элитный фактор"
+            elif ic >= 0.05:
+                cat = "MODERATE_ALPHA"
+                col = "#38BDF8"
+                rating_text = "Умеренная альфа"
+            elif ic <= -0.05:
+                cat = "INVERSE_DRAG"
+                col = "#EF4444"
+                rating_text = "Токсичный фактор"
+            else:
+                cat = "NOISE_FACTOR"
+                col = "#94A3B8"
+                rating_text = "Рыночный шум"
+
+            factor_results.append({
+                "factor": f_name,
+                "description": f_desc,
+                "ic": ic,
+                "category": cat,
+                "color": col,
+                "rating": rating_text,
+            })
+
+        factor_results.sort(key=lambda x: x["ic"], reverse=True)
+        top_f = factor_results[0] if factor_results else None
+        mean_ic = round(float(np.mean(ic_list)), 2) if ic_list else 0.0
+        std_ic = float(np.std(ic_list)) if ic_list else 0.0
+        factor_ir = round(mean_ic / std_ic, 2) if std_ic > 1e-4 else (1.0 if mean_ic > 0 else 0.0)
+
+        if top_f and top_f["ic"] >= 0.15:
+            insight = f"Элитный фактор: {top_f['factor']} (Rank IC {top_f['ic']:+}). Высокая предсказательная сила положительного математического ожидания"
+        elif top_f and top_f["ic"] > 0.0:
+            insight = f"Ведущий фактор: {top_f['factor']} (Rank IC {top_f['ic']:+}). Способствует положительному исходу сделок"
+        else:
+            insight = f"Средний IC факторов: {mean_ic:+.2f}. Рекомендуется ужесточить фильтрацию сетапов и соблюдать дисциплину"
+
+        return {
+            "factors": factor_results,
+            "top_factor": top_f["factor"] if top_f else None,
+            "top_factor_ic": top_f["ic"] if top_f else 0.0,
+            "mean_factor_ic": mean_ic,
+            "factor_ir": factor_ir,
+            "ic_insight": insight,
+            "total_trades": cnt,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[
