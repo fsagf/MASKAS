@@ -1894,6 +1894,171 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_r_distribution_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ частотного распределения доходности по риску (R-Multiple Distribution & Skewness Engine).
+        Разбивает сделки по 7 стандартизированным R-корзинам:
+        - '<-2R': Катастрофические убытки / Срыв стопов (Disaster risk)
+        - '-2R..-1R': Расширенные убытки / Проскальзывание
+        - '-1R..0R': Контролируемый риск / Скретч-сделки
+        - '0R..1R': Микро-профиты / Безубыток+
+        - '1R..2R': Стандартный целевой тейк-профит
+        - '2R..3R': Качественные раннеры
+        - '>3R': Супер-тейки / Домашние пробои (Outlier Home Runs)
+
+        Рассчитывает асимметрию распределения (Skewness) и эксцесс (Kurtosis).
+        """
+        bins_def = [
+            {"key": "LT_MINUS_2R", "label": "<-2R", "name": "Критический убыток", "color": "#DC2626", "min_r": -9999.0, "max_r": -2.0},
+            {"key": "MINUS_2_TO_1R", "label": "-2R..-1R", "name": "Расширенный убыток", "color": "#EF4444", "min_r": -2.0, "max_r": -1.0},
+            {"key": "MINUS_1_TO_0R", "label": "-1R..0R", "name": "Контролируемый стоп", "color": "#F87171", "min_r": -1.0, "max_r": 0.0},
+            {"key": "ZERO_TO_1R", "label": "0R..1R", "name": "Микро-профит / Б/У", "color": "#34D399", "min_r": 0.0, "max_r": 1.0},
+            {"key": "ONE_TO_2R", "label": "1R..2R", "name": "Базовый тейк", "color": "#10B981", "min_r": 1.0, "max_r": 2.0},
+            {"key": "TWO_TO_3R", "label": "2R..3R", "name": "Качественный раннер", "color": "#059669", "min_r": 2.0, "max_r": 3.0},
+            {"key": "GT_3R", "label": ">3R", "name": "Home Run (>3R)", "color": "#7C5CFF", "min_r": 3.0, "max_r": 9999.0},
+        ]
+
+        if not trades:
+            empty_bins = []
+            for b in bins_def:
+                empty_bins.append({
+                    **b,
+                    "trades_count": 0,
+                    "share_pct": 0.0,
+                    "net_pnl": 0.0,
+                    "avg_r": 0.0,
+                })
+            return {
+                "bins": empty_bins,
+                "skewness": 0.0,
+                "kurtosis": 0.0,
+                "avg_winner_r": 0.0,
+                "avg_loser_r": 0.0,
+                "expectancy_r": 0.0,
+                "home_runs_count": 0,
+                "fat_tail_losses_count": 0,
+                "distribution_profile": "Сбор статистики R-распределения",
+                "insight_color": "#94A3B8",
+                "total_trades": 0,
+            }
+
+        # Вычисляем R для каждой сделки с гарантией валидного риска
+        r_values: List[float] = []
+        trade_data: List[Tuple[Trade, float]] = []
+
+        for t in trades:
+            pnl = float(t.net_pnl or 0.0)
+            r_val = 0.0
+
+            if getattr(t, "initial_risk", None) and float(t.initial_risk) > 0:
+                r_val = pnl / float(t.initial_risk)
+            elif getattr(t, "stop_loss", None) and getattr(t, "entry_price", None) and float(t.entry_price or 0.0) > 0:
+                risk_per_unit = abs(float(t.entry_price) - float(t.stop_loss))
+                vol = float(t.volume or 1.0)
+                tot_risk = risk_per_unit * vol
+                if tot_risk > 0:
+                    r_val = pnl / tot_risk
+                elif getattr(t, "r_multiple", None) is not None and float(t.r_multiple) != 0.0:
+                    r_val = float(t.r_multiple)
+                else:
+                    r_val = pnl / max(float(t.entry_price) * vol * 0.01, 1.0)
+            elif getattr(t, "r_multiple", None) is not None and float(t.r_multiple) != 0.0:
+                r_val = float(t.r_multiple)
+            else:
+                # 1% от объема как разумный бейзлайн при отсутствии стопа
+                vol = float(t.volume or 1.0)
+                ep = float(t.entry_price or 100.0)
+                r_val = pnl / max(ep * vol * 0.01, 1.0)
+
+            # Ограничиваем выбросы в диапазоне [-10.0, 20.0]
+            clamped_r = max(-10.0, min(20.0, round(r_val, 2)))
+            r_values.append(clamped_r)
+            trade_data.append((t, clamped_r))
+
+        total_cnt = len(trades)
+
+        # Классификация по корзинам
+        bins_result = []
+        for b in bins_def:
+            b_trades = []
+            for t, r_val in trade_data:
+                if b["key"] == "LT_MINUS_2R" and r_val < -2.0:
+                    b_trades.append((t, r_val))
+                elif b["key"] == "MINUS_2_TO_1R" and -2.0 <= r_val < -1.0:
+                    b_trades.append((t, r_val))
+                elif b["key"] == "MINUS_1_TO_0R" and -1.0 <= r_val < 0.0:
+                    b_trades.append((t, r_val))
+                elif b["key"] == "ZERO_TO_1R" and 0.0 <= r_val < 1.0:
+                    b_trades.append((t, r_val))
+                elif b["key"] == "ONE_TO_2R" and 1.0 <= r_val < 2.0:
+                    b_trades.append((t, r_val))
+                elif b["key"] == "TWO_TO_3R" and 2.0 <= r_val < 3.0:
+                    b_trades.append((t, r_val))
+                elif b["key"] == "GT_3R" and r_val >= 3.0:
+                    b_trades.append((t, r_val))
+
+            cnt = len(b_trades)
+            share_pct = round(cnt / total_cnt * 100.0, 1)
+            b_pnl = round(sum(float(t.net_pnl or 0.0) for t, _ in b_trades), 2)
+            avg_b_r = round(sum(r for _, r in b_trades) / cnt, 2) if cnt > 0 else 0.0
+
+            bins_result.append({
+                **b,
+                "trades_count": cnt,
+                "share_pct": share_pct,
+                "net_pnl": b_pnl,
+                "avg_r": avg_b_r,
+            })
+
+        # Расчет квантовой асимметрии (Skewness) и эксцесса (Kurtosis)
+        r_arr = np.array(r_values, dtype=float)
+        mean_r = float(np.mean(r_arr))
+        std_r = float(np.std(r_arr, ddof=1)) if len(r_arr) > 1 else 0.0
+
+        if std_r > 1e-6 and len(r_arr) >= 3:
+            norm_r = (r_arr - mean_r) / std_r
+            skewness = round(float(np.mean(norm_r ** 3)), 2)
+            kurtosis = round(float(np.mean(norm_r ** 4) - 3.0), 2)
+        else:
+            skewness = 0.0
+            kurtosis = 0.0
+
+        winners = [r for r in r_values if r > 0]
+        losers = [r for r in r_values if r < 0]
+
+        avg_w_r = round(float(np.mean(winners)), 2) if winners else 0.0
+        avg_l_r = round(float(np.mean(losers)), 2) if losers else 0.0
+        expectancy_r = round(mean_r, 2)
+
+        home_runs = sum(1 for r in r_values if r >= 3.0)
+        fat_tail = sum(1 for r in r_values if r <= -2.0)
+
+        # Интерпретация формы профиля распределения
+        if skewness > 0.4:
+            profile = f"Правосторонний профиль (Skewness +{skewness}) — Убытки режутся быстро, тейки работают"
+            color = "#10B981"
+        elif skewness < -0.4:
+            profile = f"Опасный левосторонний хвост (Skewness {skewness}) — Риск пересиживания стоп-лоссов"
+            color = "#EF4444"
+        else:
+            profile = f"Симметричное нормальное распределение (Skewness {skewness:+0.2f})"
+            color = "#38BDF8"
+
+        return {
+            "bins": bins_result,
+            "skewness": skewness,
+            "kurtosis": kurtosis,
+            "avg_winner_r": avg_w_r,
+            "avg_loser_r": avg_l_r,
+            "expectancy_r": expectancy_r,
+            "home_runs_count": home_runs,
+            "fat_tail_losses_count": fat_tail,
+            "distribution_profile": profile,
+            "insight_color": color,
+            "total_trades": total_cnt,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

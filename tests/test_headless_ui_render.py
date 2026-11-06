@@ -92,6 +92,11 @@ def test_dashboard_view_headless_render():
     assert regime_card is not None
     assert dash.market_regime_container is not None
 
+    # Verify R-multiple distribution card renders cleanly
+    r_dist_card = dash._build_r_distribution_card(trades=[])
+    assert r_dist_card is not None
+    assert dash.r_distribution_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

@@ -774,6 +774,53 @@ def test_market_regime_matrix():
     assert len(mat["regime_insight"]) > 5
 
 
+def test_r_distribution_matrix():
+    """Verify R-multiple frequency distribution, binning, skewness and kurtosis calculations."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_r_distribution_matrix([])
+    assert len(empty_mat["bins"]) == 7
+    assert empty_mat["skewness"] == 0.0
+    assert empty_mat["kurtosis"] == 0.0
+    assert empty_mat["total_trades"] == 0
+
+    # 2. Trades across distinct R buckets (all risk = 100)
+    # R = +4.0 (>3R)
+    t_hr = Trade(direction="LONG", entry_price=100.0, exit_price=140.0, volume=10.0, stop_loss=90.0)
+    # R = +2.5 (2R..3R)
+    t_runner = Trade(direction="LONG", entry_price=100.0, exit_price=125.0, volume=10.0, stop_loss=90.0)
+    # R = +1.5 (1R..2R)
+    t_target = Trade(direction="LONG", entry_price=100.0, exit_price=115.0, volume=10.0, stop_loss=90.0)
+    # R = +0.3 (0R..1R)
+    t_scratch = Trade(direction="LONG", entry_price=100.0, exit_price=103.0, volume=10.0, stop_loss=90.0)
+    # R = -0.9 (-1R..0R)
+    t_stop = Trade(direction="LONG", entry_price=100.0, exit_price=91.0, volume=10.0, stop_loss=90.0)
+    # R = -2.5 (<-2R)
+    t_fat = Trade(direction="LONG", entry_price=100.0, exit_price=75.0, volume=10.0, stop_loss=90.0)
+
+    trades = [t_hr, t_runner, t_target, t_scratch, t_stop, t_fat]
+    mat = AnalyticsService.calculate_r_distribution_matrix(trades)
+
+    assert mat["total_trades"] == 6
+    assert mat["home_runs_count"] == 1
+    assert mat["fat_tail_losses_count"] == 1
+    assert mat["avg_winner_r"] > 0
+    assert mat["avg_loser_r"] < 0
+
+    bin_map = {b["key"]: b for b in mat["bins"]}
+    assert bin_map["GT_3R"]["trades_count"] == 1
+    assert bin_map["TWO_TO_3R"]["trades_count"] == 1
+    assert bin_map["ONE_TO_2R"]["trades_count"] == 1
+    assert bin_map["ZERO_TO_1R"]["trades_count"] == 1
+    assert bin_map["MINUS_1_TO_0R"]["trades_count"] == 1
+    assert bin_map["LT_MINUS_2R"]["trades_count"] == 1
+    assert bin_map["MINUS_2_TO_1R"]["trades_count"] == 0
+
+    assert isinstance(mat["skewness"], float)
+    assert isinstance(mat["kurtosis"], float)
+    assert len(mat["distribution_profile"]) > 10
+
+
+
 
 
 

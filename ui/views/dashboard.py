@@ -125,6 +125,7 @@ class DashboardView(ft.Container):
         self.monthly_phase_container = ft.Container()
         self.sizing_simulator_container = ft.Container()
         self.market_regime_container = ft.Container()
+        self.r_distribution_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -286,6 +287,8 @@ class DashboardView(ft.Container):
                 self.sizing_simulator_container,
                 ft.Container(height=4),
                 self.market_regime_container,
+                ft.Container(height=4),
+                self.r_distribution_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -2287,6 +2290,174 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_r_distribution_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивная гистограмма частотного распределения R-Multiple и квантовая асимметрия (Skewness / Kurtosis).
+        """
+        matrix = AnalyticsService.calculate_r_distribution_matrix(trades)
+        bins = matrix["bins"]
+        skewness = matrix["skewness"]
+        kurtosis = matrix["kurtosis"]
+        profile = matrix["distribution_profile"]
+        color = matrix["insight_color"]
+        tot_trades = matrix["total_trades"]
+
+        max_share = max((b["share_pct"] for b in bins), default=1.0)
+        if max_share <= 0:
+            max_share = 1.0
+
+        bar_columns = []
+        for b in bins:
+            pct = b["share_pct"]
+            cnt = b["trades_count"]
+            b_color = b["color"]
+            # Нормализация высоты бара (от 6 до 85 пикселей)
+            h = max(6, int((pct / max_share) * 85)) if tot_trades > 0 else 6
+
+            pnl_val = b["net_pnl"]
+            pnl_sign = "+" if pnl_val >= 0 else ""
+
+            bar_widget = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text(f"{pct:.0f}%", size=10, weight=ft.FontWeight.W_600, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                        ft.Container(
+                            width=32,
+                            height=h,
+                            bgcolor=b_color if cnt > 0 else SURFACE_2,
+                            border_radius=ft.border_radius.only(top_left=RADIUS_SM, top_right=RADIUS_SM),
+                            border=ft.border.all(1, ft.Colors.with_opacity(0.4, b_color)) if cnt > 0 else ft.border.all(1, BORDER_SUBTLE),
+                            tooltip=f"Корзина: {b['name']}\nСделок: {cnt} ({pct:.1f}%)\nNet PnL: {pnl_sign}${pnl_val:,.2f}\nСр. R: {b['avg_r']:+.2f}R",
+                        ),
+                        ft.Text(b["label"], size=10, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                        ft.Text(f"{cnt} сд.", size=9, color=TEXT_MUTED, font_family=FONT_MONO),
+                    ],
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    alignment=ft.MainAxisAlignment.END,
+                    spacing=3,
+                ),
+                padding=ft.padding.symmetric(horizontal=4, vertical=2),
+                col={"xs": 6, "sm": 3, "md": 1.7},
+            )
+            bar_columns.append(bar_widget)
+
+        # 4 компактные карточки квантовых метрик
+        stat_cards = [
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Асимметрия (Skew)", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Text(f"{skewness:+0.2f}", size=14, weight=ft.FontWeight.BOLD, color=color, font_family=FONT_MONO),
+                        ft.Text("Right-tailed alpha" if skewness >= 0 else "Left-tailed risk", size=9, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                    ],
+                    spacing=2,
+                ),
+                bgcolor=SURFACE_2,
+                padding=10,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Эксцесс (Kurtosis)", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Text(f"{kurtosis:+0.2f}", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                        ft.Text("Островершинность", size=9, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                    ],
+                    spacing=2,
+                ),
+                bgcolor=SURFACE_2,
+                padding=10,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Ср. Тейк / Стоп", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Text(f"+{matrix['avg_winner_r']:.2f}R / {matrix['avg_loser_r']:.2f}R", size=13, weight=ft.FontWeight.BOLD, color=PROFIT, font_family=FONT_MONO),
+                        ft.Text(f"Exp: {matrix['expectancy_r']:+.2f}R", size=9, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=2,
+                ),
+                bgcolor=SURFACE_2,
+                padding=10,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Home Runs (>3R)", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Text(f"{matrix['home_runs_count']} сд.", size=14, weight=ft.FontWeight.BOLD, color="#7C5CFF", font_family=FONT_MONO),
+                        ft.Text(f"Хвост <-2R: {matrix['fat_tail_losses_count']} сд.", size=9, color=LOSS if matrix['fat_tail_losses_count'] > 0 else TEXT_MUTED, font_family=FONT_FAMILY),
+                    ],
+                    spacing=2,
+                ),
+                bgcolor=SURFACE_2,
+                padding=10,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+        ]
+
+        header_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.AUTO_GRAPH_ROUNDED, size=13, color=color),
+                    ft.Text(profile, size=10, weight=ft.FontWeight.BOLD, color=color, font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, color),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, color)),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.BAR_CHART_ROUNDED, color="#7C5CFF", size=18),
+                                    ft.Text("Частотное распределение доходности по риску", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(R-Multiple Distribution)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    # Гистограмма
+                    ft.Container(
+                        content=ft.ResponsiveRow(controls=bar_columns, alignment=ft.MainAxisAlignment.SPACE_AROUND),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=10),
+                        border_radius=RADIUS_MD,
+                        border=ft.border.all(1, BORDER_SUBTLE),
+                    ),
+                    ft.Container(height=4),
+                    # Сетка метрик
+                    ft.ResponsiveRow(controls=stat_cards, spacing=10, run_spacing=10),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -2849,6 +3020,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Market Regime Matrix: {ex_reg}")
             self.market_regime_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга фаз рынка: {ex_reg}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.10 Обновление распределения R-Multiple (Error Boundary)
+        try:
+            self.r_distribution_container.content = self._build_r_distribution_card(trades)
+        except Exception as ex_r:
+            logging.exception(f"[DashboardView] Error rendering R-Multiple Distribution: {ex_r}")
+            self.r_distribution_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга R-распределения: {ex_r}", color=ft.Colors.ERROR),
                 padding=12,
             )
 
