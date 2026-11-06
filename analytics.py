@@ -2342,6 +2342,155 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_mtf_alignment_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ мульти-таймфрейм согласованности тренда (Multi-Timeframe Trend Alignment Matrix).
+        Классифицирует сделки по 4 уровням таймфрейм-конфлюэнции:
+        - TRIPLE_ALIGNED: Тройное согласование (HTF Daily/4H + ITF 1H + LTF 5m)
+        - DOUBLE_ALIGNED: Двойное согласование (Продолжение локального тренда)
+        - PULLBACK_COUNTER: Откат / Контртренд (Сделка против старшего тренда)
+        - CHOP_UNALIGNED: Рассогласование / Боковик без единого направления
+        """
+        mtf_def = {
+            "TRIPLE_ALIGNED": {
+                "key": "TRIPLE_ALIGNED",
+                "name": "Тройное согласование (HTF+ITF+LTF)",
+                "sub": "Full Institutional Confluence",
+                "color": "#10B981",
+                "icon": "layers_rounded",
+            },
+            "DOUBLE_ALIGNED": {
+                "key": "DOUBLE_ALIGNED",
+                "name": "Двойное согласование (2 TF)",
+                "sub": "Trend Continuation",
+                "color": "#38BDF8",
+                "icon": "filter_2_rounded",
+            },
+            "PULLBACK_COUNTER": {
+                "key": "PULLBACK_COUNTER",
+                "name": "Откат / Контртренд",
+                "sub": "Pullback / Mean Reversion",
+                "color": "#F59E0B",
+                "icon": "u_turn_left_rounded",
+            },
+            "CHOP_UNALIGNED": {
+                "key": "CHOP_UNALIGNED",
+                "name": "Рассогласование / Боковик",
+                "sub": "Mixed Chop / Range",
+                "color": "#EF4444",
+                "icon": "close_rounded",
+            },
+        }
+
+        if not trades:
+            empty_mtf = {}
+            for k, meta in mtf_def.items():
+                empty_mtf[k] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                }
+            return {
+                "alignments": empty_mtf,
+                "best_alignment": None,
+                "mtf_edge_ratio": 1.0,
+                "mtf_insight": "Анализ мульти-таймфрейм согласованности активен",
+                "total_trades": 0,
+            }
+
+        def classify_mtf(t: Trade) -> str:
+            notes = (getattr(t, "notes", "") or "").lower()
+            strat = (getattr(t, "strategy_tag", "") or "").lower()
+
+            if any(w in notes or w in strat for w in ["htf+ltf", "3tf", "triple", "confluence", "тренд d1", "d1+h1", "4h+1h", "институциональн", "старший тренд"]):
+                return "TRIPLE_ALIGNED"
+            if any(w in notes or w in strat for w in ["контртренд", "counter", "откат", "pullback", "reversion", "против"]):
+                return "PULLBACK_COUNTER"
+            if any(w in notes or w in strat for w in ["флэт", "боковик", "chop", "mixed", "распил", "диапазон"]):
+                return "CHOP_UNALIGNED"
+            if any(w in notes or w in strat for w in ["тренд", "trend", "пробой", "breakout", "h1", "15m", "continuation"]):
+                return "DOUBLE_ALIGNED"
+
+            if getattr(t, "opened_at", None) and getattr(t, "closed_at", None):
+                dur_hours = (t.closed_at - t.opened_at).total_seconds() / 3600.0
+                if dur_hours >= 4.0:
+                    return "TRIPLE_ALIGNED"
+                elif dur_hours >= 0.5:
+                    return "DOUBLE_ALIGNED"
+
+            return "DOUBLE_ALIGNED"
+
+        bucketed: Dict[str, List[Trade]] = {k: [] for k in mtf_def}
+        for t in trades:
+            cat = classify_mtf(t)
+            bucketed[cat].append(t)
+
+        results = {}
+        for k, b_trades in bucketed.items():
+            meta = mtf_def[k]
+            cnt = len(b_trades)
+            if cnt == 0:
+                results[k] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                }
+                continue
+
+            pnls = [float(t.net_pnl or 0.0) for t in b_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / cnt * 100.0, 1)
+            net_pnl = round(float(sum(pnls)), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            avg_pnl = round(net_pnl / cnt, 2)
+
+            results[k] = {
+                **meta,
+                "trades_count": cnt,
+                "win_trades": len(wins),
+                "loss_trades": len(losses),
+                "winrate": winrate,
+                "net_pnl": net_pnl,
+                "profit_factor": pf,
+                "avg_trade_pnl": avg_pnl,
+            }
+
+        active = [b for b in results.values() if b["trades_count"] > 0]
+        best_cat = max(active, key=lambda x: x["net_pnl"])["key"] if active else None
+
+        triple_wr = results["TRIPLE_ALIGNED"]["winrate"]
+        chop_wr = results["CHOP_UNALIGNED"]["winrate"]
+        edge_ratio = round(triple_wr / max(chop_wr, 1.0), 2) if results["TRIPLE_ALIGNED"]["trades_count"] > 0 else 1.0
+
+        if best_cat:
+            b_meta = results[best_cat]
+            insight = f"Лучшая согласованность: {b_meta['name']} -> Net PnL: ${b_meta['net_pnl']:+,.2f} (Winrate: {b_meta['winrate']}%)"
+        else:
+            insight = "Анализ мульти-таймфрейм согласованности активен"
+
+        return {
+            "alignments": results,
+            "best_alignment": best_cat,
+            "mtf_edge_ratio": edge_ratio,
+            "mtf_insight": insight,
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

@@ -891,6 +891,45 @@ def test_rule_violation_matrix():
     assert len(mat["discipline_insight"]) > 5
 
 
+def test_mtf_alignment_matrix():
+    """Verify multi-timeframe trend alignment, confluence categorization and edge ratios."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_mtf_alignment_matrix([])
+    assert set(empty_mat["alignments"].keys()) == {"TRIPLE_ALIGNED", "DOUBLE_ALIGNED", "PULLBACK_COUNTER", "CHOP_UNALIGNED"}
+    assert empty_mat["best_alignment"] is None
+    assert empty_mat["mtf_edge_ratio"] == 1.0
+
+    # 2. Trades across MTF categories
+    t_triple = Trade(direction="LONG", entry_price=100.0, exit_price=150.0, volume=10.0, notes="HTF+LTF институциональный тренд") # +500
+    t_double = Trade(direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0, notes="Trend продолжение") # +200
+    t_pullback = Trade(direction="LONG", entry_price=100.0, exit_price=85.0, volume=10.0, notes="контртренд откат") # -150
+    t_chop = Trade(direction="LONG", entry_price=100.0, exit_price=75.0, volume=10.0, notes="боковик распил") # -250
+
+    trades = [t_triple, t_double, t_pullback, t_chop]
+    mat = AnalyticsService.calculate_mtf_alignment_matrix(trades)
+    al = mat["alignments"]
+
+    assert mat["total_trades"] == 4
+    assert al["TRIPLE_ALIGNED"]["trades_count"] == 1
+    assert al["TRIPLE_ALIGNED"]["net_pnl"] == 500.0
+    assert al["TRIPLE_ALIGNED"]["winrate"] == 100.0
+
+    assert al["DOUBLE_ALIGNED"]["trades_count"] == 1
+    assert al["DOUBLE_ALIGNED"]["net_pnl"] == 200.0
+
+    assert al["PULLBACK_COUNTER"]["trades_count"] == 1
+    assert al["PULLBACK_COUNTER"]["net_pnl"] == -150.0
+
+    assert al["CHOP_UNALIGNED"]["trades_count"] == 1
+    assert al["CHOP_UNALIGNED"]["net_pnl"] == -250.0
+    assert al["CHOP_UNALIGNED"]["winrate"] == 0.0
+
+    assert mat["best_alignment"] == "TRIPLE_ALIGNED"
+    assert mat["mtf_edge_ratio"] > 1.0
+    assert len(mat["mtf_insight"]) > 10
+
+
+
 
 
 

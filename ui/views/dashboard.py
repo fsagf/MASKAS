@@ -128,6 +128,7 @@ class DashboardView(ft.Container):
         self.r_distribution_container = ft.Container()
         self.rr_efficiency_container = ft.Container()
         self.rule_violation_container = ft.Container()
+        self.mtf_alignment_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -295,6 +296,8 @@ class DashboardView(ft.Container):
                 self.rr_efficiency_container,
                 ft.Container(height=4),
                 self.rule_violation_container,
+                ft.Container(height=4),
+                self.mtf_alignment_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -2757,6 +2760,168 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_mtf_alignment_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный анализ мульти-таймфрейм согласованности тренда (Multi-Timeframe Trend Alignment Matrix).
+        """
+        matrix = AnalyticsService.calculate_mtf_alignment_matrix(trades)
+        alignments = matrix["alignments"]
+        best_al = matrix["best_alignment"]
+        insight = matrix["mtf_insight"]
+
+        icon_map = {
+            "TRIPLE_ALIGNED": ft.Icons.LAYERS_ROUNDED,
+            "DOUBLE_ALIGNED": ft.Icons.FILTER_2_ROUNDED,
+            "PULLBACK_COUNTER": ft.Icons.U_TURN_LEFT_ROUNDED,
+            "CHOP_UNALIGNED": ft.Icons.CLOSE_ROUNDED,
+        }
+
+        cards = []
+        for key in ["TRIPLE_ALIGNED", "DOUBLE_ALIGNED", "PULLBACK_COUNTER", "CHOP_UNALIGNED"]:
+            al = alignments[key]
+            is_best = (key == best_al and al["trades_count"] > 0)
+            pnl_val = al["net_pnl"]
+            pnl_color = PROFIT if pnl_val >= 0 else LOSS
+            pnl_sign = "+" if pnl_val >= 0 else ""
+            r_icon = icon_map.get(key, ft.Icons.AUTO_GRAPH_ROUNDED)
+
+            leader_chip = ft.Container(
+                content=ft.Text("TOP EDGE", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                bgcolor=ft.Colors.with_opacity(0.15, ACCENT_PRIMARY),
+                padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.4, ACCENT_PRIMARY)),
+            ) if is_best else ft.Container()
+
+            card_widget = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        ft.Container(
+                                            content=ft.Icon(r_icon, size=15, color=al["color"]),
+                                            padding=5,
+                                            bgcolor=ft.Colors.with_opacity(0.12, al["color"]),
+                                            border_radius=RADIUS_SM,
+                                        ),
+                                        ft.Column(
+                                            controls=[
+                                                ft.Text(al["name"], size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                                ft.Text(al["sub"], size=10, color=TEXT_MUTED, font_family=FONT_MONO),
+                                            ],
+                                            spacing=1,
+                                        ),
+                                    ],
+                                    spacing=8,
+                                ),
+                                leader_chip,
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=4),
+                        ft.ProgressBar(
+                            value=al["winrate"] / 100.0 if al["trades_count"] > 0 else 0.0,
+                            color=al["color"],
+                            bgcolor=SURFACE_2,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                        ft.Container(height=4),
+                        ft.Row(
+                            controls=[
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Net PnL", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{pnl_sign}${pnl_val:,.2f}", size=13, weight=ft.FontWeight.BOLD, color=pnl_color, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Winrate", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{al['winrate']}% ({al['trades_count']} сд.)", size=11, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Profit Factor", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{al['profit_factor']:.2f}", size=11, weight=ft.FontWeight.W_600, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.35, al["color"]) if is_best else BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            )
+            cards.append(card_widget)
+
+        header_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.LAYERS_ROUNDED, size=13, color="#8B5CF6"),
+                    ft.Text(f"Edge Ratio: {matrix['mtf_edge_ratio']}x", size=10, weight=ft.FontWeight.BOLD, color="#8B5CF6", font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, "#8B5CF6"),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, "#8B5CF6")),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.LAYERS_ROUNDED, color="#8B5CF6", size=18),
+                                    ft.Text("Мульти-таймфрейм согласованность тренда", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(MTF Alignment Matrix)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=cards, spacing=10, run_spacing=10),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, size=13, color=TEXT_MUTED),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -3349,6 +3514,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Rule Violation Matrix: {ex_rv}")
             self.rule_violation_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга матрицы нарушений правил: {ex_rv}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.13 Обновление матрицы мульти-таймфрейм согласованности (Error Boundary)
+        try:
+            self.mtf_alignment_container.content = self._build_mtf_alignment_card(trades)
+        except Exception as ex_mtf:
+            logging.exception(f"[DashboardView] Error rendering MTF Alignment Matrix: {ex_mtf}")
+            self.mtf_alignment_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга MTF матрицы: {ex_mtf}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

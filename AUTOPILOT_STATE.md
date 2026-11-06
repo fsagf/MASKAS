@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 17 (Completed) -> Starting Iteration 18
+- **Iteration:** 18 (Completed) -> Starting Iteration 19
 - **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 48 Tests Green (100% Passing). Rule Violations & Financial Drag Matrix Deployed.
+- **Status:** All 49 Tests Green (100% Passing). Multi-Timeframe Trend Alignment Matrix Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -125,16 +125,22 @@
   - Identifies the single most costly violation leak across portfolio history.
   - Created `_build_rule_violation_card` in `ui/views/dashboard.py` featuring 6 responsive violation cards with severity badges (`CRITICAL`, `HIGH`, `MODERATE`, `CLEAN`), drag loss sums, and insight bar.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (48 tests):**
+- [x] **Multi-Timeframe Trend Alignment Matrix & Edge Analyzer (Iteration 18):**
+  - Implemented `AnalyticsService.calculate_mtf_alignment_matrix(trades)`: segments trades across 4 multi-timeframe confluence levels (`Triple Aligned`, `Double Aligned`, `Pullback Counter-Trend`, `Chop / Unaligned`).
+  - Calculates Winrate %, Net PnL, Profit Factor, Trade Count, and MTF Edge Ratio (`Triple Aligned WR / Chop WR`).
+  - Discovers top institutional edge alignment and provides actionable confluence insights.
+  - Created `_build_mtf_alignment_card` in `ui/views/dashboard.py` with 4 responsive trend confluence cards, winrate progress bars, TOP EDGE badge, and insight header chip.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (49 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 21 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 22 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Rule Violation Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including MTF Alignment Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 18+)
-- [ ] **TraderSync / EdgeProvider:** Multi-Timeframe Entry Confirmation Matrix (Trend alignment across 1H / 15m / 5m / 1m).
+## Competitor Backlog (R&D for Iteration 19+)
 - [ ] **TradeZella:** Pre-Trade Checklist & Routine Compliance Engine (Plan execution checklist score vs PnL correlation).
+- [ ] **TraderSync:** Setup Grading & Quality Score Matrix (A+ / B / C Playbook Execution Winrate & Profit Factor).
