@@ -1003,6 +1003,50 @@ def test_session_overlap_matrix():
     assert len(mat["overlap_insight"]) > 10
 
 
+def test_setup_grading_matrix():
+    """Verify playbook setup quality grading (A+/A/B/C), winrates, drag calculation and alpha insights."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_setup_grading_matrix([])
+    assert set(empty_mat["tiers"].keys()) == {"A_PLUS", "A_TIER", "B_TIER", "C_TIER"}
+    assert empty_mat["best_tier"] is None
+    assert empty_mat["a_tier_discipline_pct"] == 0.0
+
+    # 2. Trades in distinct quality tiers
+    # A+ Setup: full target, high RR, clear strategy
+    t_a_plus = Trade(direction="LONG", entry_price=100.0, exit_price=150.0, volume=10.0, stop_loss=90.0, take_profit=150.0, strategy_tag="Order Block", notes="A+ эталон") # +500
+    # A Setup: good target, standard RR
+    t_a = Trade(direction="LONG", entry_price=100.0, exit_price=125.0, volume=10.0, stop_loss=90.0, take_profit=125.0, strategy_tag="Breakout", notes="класс a") # +250
+    # B Setup: acceptable secondary setup
+    t_b = Trade(direction="LONG", entry_price=100.0, exit_price=115.0, volume=10.0, stop_loss=90.0, strategy_tag="Scalp", notes="класс b") # +150
+    # C Setup: sub-optimal / noise
+    t_c = Trade(direction="LONG", entry_price=100.0, exit_price=80.0, volume=10.0, stop_loss=None, notes="хлам вход") # -200
+
+    trades = [t_a_plus, t_a, t_b, t_c]
+    mat = AnalyticsService.calculate_setup_grading_matrix(trades)
+    tiers = mat["tiers"]
+
+    assert mat["total_trades"] == 4
+    assert tiers["A_PLUS"]["trades_count"] == 1
+    assert tiers["A_PLUS"]["net_pnl"] == 500.0
+    assert tiers["A_PLUS"]["winrate"] == 100.0
+
+    assert tiers["A_TIER"]["trades_count"] == 1
+    assert tiers["A_TIER"]["net_pnl"] == 250.0
+
+    assert tiers["B_TIER"]["trades_count"] == 1
+    assert tiers["B_TIER"]["net_pnl"] == 150.0
+
+    assert tiers["C_TIER"]["trades_count"] == 1
+    assert tiers["C_TIER"]["net_pnl"] == -200.0
+    assert tiers["C_TIER"]["winrate"] == 0.0
+
+    assert mat["best_tier"] == "A_PLUS"
+    assert mat["a_tier_discipline_pct"] == 50.0
+    assert mat["c_tier_loss_drag"] == 200.0
+    assert len(mat["setup_grading_insight"]) > 10
+
+
+
 
 
 

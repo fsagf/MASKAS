@@ -122,6 +122,11 @@ def test_dashboard_view_headless_render():
     assert overlap_card is not None
     assert dash.session_overlap_container is not None
 
+    # Verify Playbook setup grading card renders cleanly
+    grading_card = dash._build_setup_grading_card(trades=[])
+    assert grading_card is not None
+    assert dash.setup_grading_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

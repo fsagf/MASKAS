@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 20 (Completed) -> Starting Iteration 21
+- **Iteration:** 21 (Completed) -> Starting Iteration 22
 - **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 51 Tests Green (100% Passing). Market Session Overlap Alpha Matrix Deployed.
+- **Status:** All 52 Tests Green (100% Passing). Playbook Setup Quality Grading Matrix Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -143,16 +143,22 @@
   - Discovers top institutional liquidity window and delivers actionable session timing insights.
   - Created `_build_session_overlap_card` in `ui/views/dashboard.py` featuring 4 responsive window cards with progress bars, TOP WINDOW badge, and Alpha header chip.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (51 tests):**
+- [x] **Playbook Setup Quality Grading Matrix (Iteration 21):**
+  - Implemented `AnalyticsService.calculate_setup_grading_matrix(trades)`: categorizes trades into 4 quality tiers (`A+ Setup`, `A Setup`, `B Setup`, `C Setup`).
+  - Computes Winrate %, Net PnL, Profit Factor, and Average Trade PnL for each tier.
+  - Measures A/A+ Discipline Ratio (%) and quantifies C-Tier Dollar Drag ($ lost on low-conviction noise trades).
+  - Created `_build_setup_grading_card` in `ui/views/dashboard.py` with 4 responsive tier cards, progress bars, PRIME TIER badge, and setup discipline header chip.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (52 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 24 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 25 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Session Overlap Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Setup Grading Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 21+)
-- [ ] **TraderSync:** Setup Grading & Quality Score Matrix (A+ / B / C Playbook Execution Winrate & Profit Factor).
+## Competitor Backlog (R&D for Iteration 22+)
 - [ ] **TradeZella:** Interactive Trade Tag Word Cloud & Setup PnL Treemap Engine.
+- [ ] **TraderSync:** Rolling 30-Day Sharpe & Winrate Momentum Engine (Dynamic Edge Decay Detector).

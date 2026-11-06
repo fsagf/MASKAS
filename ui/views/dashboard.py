@@ -131,6 +131,7 @@ class DashboardView(ft.Container):
         self.mtf_alignment_container = ft.Container()
         self.compliance_routine_container = ft.Container()
         self.session_overlap_container = ft.Container()
+        self.setup_grading_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -304,6 +305,8 @@ class DashboardView(ft.Container):
                 self.compliance_routine_container,
                 ft.Container(height=4),
                 self.session_overlap_container,
+                ft.Container(height=4),
+                self.setup_grading_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -3312,6 +3315,168 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_setup_grading_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный анализ качества сетапов и градация по плейбуку (Playbook Setup Quality Grading Matrix).
+        """
+        matrix = AnalyticsService.calculate_setup_grading_matrix(trades)
+        tiers = matrix["tiers"]
+        best_t = matrix["best_tier"]
+        insight = matrix["setup_grading_insight"]
+
+        icon_map = {
+            "A_PLUS": ft.Icons.VERIFIED_ROUNDED,
+            "A_TIER": ft.Icons.CHECK_CIRCLE_ROUNDED,
+            "B_TIER": ft.Icons.REMOVE_CIRCLE_OUTLINE_ROUNDED,
+            "C_TIER": ft.Icons.CANCEL_ROUNDED,
+        }
+
+        cards = []
+        for key in ["A_PLUS", "A_TIER", "B_TIER", "C_TIER"]:
+            t = tiers[key]
+            is_best = (key == best_t and t["trades_count"] > 0)
+            pnl_val = t["net_pnl"]
+            pnl_color = PROFIT if pnl_val >= 0 else LOSS
+            pnl_sign = "+" if pnl_val >= 0 else ""
+            t_icon = icon_map.get(key, ft.Icons.STAR_ROUNDED)
+
+            leader_chip = ft.Container(
+                content=ft.Text("PRIME TIER", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                bgcolor=ft.Colors.with_opacity(0.15, ACCENT_PRIMARY),
+                padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.4, ACCENT_PRIMARY)),
+            ) if is_best else ft.Container()
+
+            card_widget = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        ft.Container(
+                                            content=ft.Icon(t_icon, size=15, color=t["color"]),
+                                            padding=5,
+                                            bgcolor=ft.Colors.with_opacity(0.12, t["color"]),
+                                            border_radius=RADIUS_SM,
+                                        ),
+                                        ft.Column(
+                                            controls=[
+                                                ft.Text(t["name"], size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                                ft.Text(t["sub"], size=9, color=TEXT_MUTED, font_family=FONT_MONO),
+                                            ],
+                                            spacing=1,
+                                        ),
+                                    ],
+                                    spacing=8,
+                                ),
+                                leader_chip,
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=4),
+                        ft.ProgressBar(
+                            value=t["winrate"] / 100.0 if t["trades_count"] > 0 else 0.0,
+                            color=t["color"],
+                            bgcolor=SURFACE_2,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                        ft.Container(height=4),
+                        ft.Row(
+                            controls=[
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Net PnL", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{pnl_sign}${pnl_val:,.2f}", size=13, weight=ft.FontWeight.BOLD, color=pnl_color, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Winrate", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{t['winrate']}% ({t['trades_count']} сд.)", size=11, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Profit Factor", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{t['profit_factor']:.2f}", size=11, weight=ft.FontWeight.W_600, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.35, t["color"]) if is_best else BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            )
+            cards.append(card_widget)
+
+        header_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.VERIFIED_ROUNDED, size=13, color="#7C5CFF"),
+                    ft.Text(f"A/A+ Дисциплина: {matrix['a_tier_discipline_pct']}%", size=10, weight=ft.FontWeight.BOLD, color="#7C5CFF", font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, "#7C5CFF"),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, "#7C5CFF")),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.VERIFIED_ROUNDED, color="#7C5CFF", size=18),
+                                    ft.Text("Градация качества сетапов", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Playbook Setup Grading)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=cards, spacing=10, run_spacing=10),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, size=13, color=TEXT_MUTED),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -3934,6 +4099,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Session Overlap Matrix: {ex_ol}")
             self.session_overlap_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга перекрытия сессий: {ex_ol}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.16 Обновление матрицы градации сетапов (Error Boundary)
+        try:
+            self.setup_grading_container.content = self._build_setup_grading_card(trades)
+        except Exception as ex_sg:
+            logging.exception(f"[DashboardView] Error rendering Setup Grading Matrix: {ex_sg}")
+            self.setup_grading_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга градации сетапов: {ex_sg}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

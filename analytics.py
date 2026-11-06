@@ -2791,6 +2791,177 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_setup_grading_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ качества сетапов и градация по плейбуку (Playbook Setup Quality Grading Matrix).
+        Классифицирует сделки по 4 качественным категориям институционального плейбука:
+        - A_PLUS: A+ Setup — Эталонный сетап наивысшего качества (Ключевой уровень, R:R >= 2.5, полная дисциплина)
+        - A_TIER: A Setup — Базовый системный сетап (Хороший контекст, R:R >= 2.0, соблюдение риска)
+        - B_TIER: B Setup — Вторичный сетап с компромиссом (Неидеальная точка входа, умеренный R:R 1.5–2.0)
+        - C_TIER: C Setup — Субоптимальный сетап / Шум (Поздний вход, плохой R:R, эмоциональное давление)
+        """
+        tiers_def = {
+            "A_PLUS": {
+                "key": "A_PLUS",
+                "name": "A+ Setup (Эталон)",
+                "sub": "Flawless Institutional Edge",
+                "color": "#7C5CFF",
+                "icon": "verified_rounded",
+            },
+            "A_TIER": {
+                "key": "A_TIER",
+                "name": "A Setup (Системный)",
+                "sub": "Core Playbook Setup",
+                "color": "#10B981",
+                "icon": "check_circle_rounded",
+            },
+            "B_TIER": {
+                "key": "B_TIER",
+                "name": "B Setup (Вторичный)",
+                "sub": "Secondary / Minor Deviations",
+                "color": "#F59E0B",
+                "icon": "remove_circle_outline_rounded",
+            },
+            "C_TIER": {
+                "key": "C_TIER",
+                "name": "C Setup (Субоптимальный)",
+                "sub": "Noise / Sub-optimal Entry",
+                "color": "#EF4444",
+                "icon": "cancel_rounded",
+            },
+        }
+
+        if not trades:
+            empty_res = {}
+            for k, meta in tiers_def.items():
+                empty_res[k] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                    "share_pct": 0.0,
+                }
+            return {
+                "tiers": empty_res,
+                "best_tier": None,
+                "a_tier_discipline_pct": 0.0,
+                "c_tier_loss_drag": 0.0,
+                "setup_grading_insight": "Анализ градации качества сетапов активен",
+                "total_trades": 0,
+            }
+
+        def detect_tier(t: Trade) -> str:
+            notes = (getattr(t, "notes", "") or "").lower()
+            strat = (getattr(t, "strategy_tag", "") or "").lower()
+
+            if any(w in notes or w in strat for w in ["a+", "а+", "tier 1", "эталон", "5 звезд", "grade a+"]):
+                return "A_PLUS"
+            if any(w in notes or w in strat for w in ["setup a", "сетап а", "класс a", "tier 2", "grade a"]):
+                return "A_TIER"
+            if any(w in notes or w in strat for w in ["setup b", "сетап б", "класс b", "tier 3", "grade b"]):
+                return "B_TIER"
+            if any(w in notes or w in strat for w in ["setup c", "сетап с", "класс c", "мусор", "хлам", "grade c"]):
+                return "C_TIER"
+
+            # Алгоритмическая классификация по метрикам сделки
+            ep = float(t.entry_price or 100.0)
+            sl = float(t.stop_loss or 0.0)
+            tp = float(t.take_profit or 0.0)
+            has_sl = bool(sl > 0 and abs(ep - sl) > 0)
+            has_tp = bool(tp > 0 and abs(tp - ep) > 0)
+            no_tilt = not getattr(t, "is_tilt", False) and "тильт" not in notes
+            no_fomo = not getattr(t, "is_fomo", False) and "fomo" not in notes
+            has_strat = bool(strat and strat not in ("default", "none", "—"))
+
+            rr = (abs(tp - ep) / abs(ep - sl)) if (has_sl and has_tp) else (float(getattr(t, "r_multiple", 0.0) or 2.0))
+
+            if has_sl and has_strat and no_tilt and no_fomo and rr >= 2.5:
+                return "A_PLUS"
+            elif has_sl and has_strat and no_tilt and no_fomo and rr >= 2.0:
+                return "A_TIER"
+            elif has_sl and (no_tilt or no_fomo) and rr >= 1.5:
+                return "B_TIER"
+            else:
+                return "C_TIER"
+
+        total_cnt = len(trades)
+        bucketed: Dict[str, List[Trade]] = {k: [] for k in tiers_def}
+        for t in trades:
+            t_tier = detect_tier(t)
+            bucketed[t_tier].append(t)
+
+        results = {}
+        for k, b_trades in bucketed.items():
+            meta = tiers_def[k]
+            cnt = len(b_trades)
+            if cnt == 0:
+                results[k] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                    "share_pct": 0.0,
+                }
+                continue
+
+            pnls = [float(t.net_pnl or 0.0) for t in b_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / cnt * 100.0, 1)
+            net_pnl = round(float(sum(pnls)), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            avg_pnl = round(net_pnl / cnt, 2)
+            share_pct = round(cnt / total_cnt * 100.0, 1)
+
+            results[k] = {
+                **meta,
+                "trades_count": cnt,
+                "win_trades": len(wins),
+                "loss_trades": len(losses),
+                "winrate": winrate,
+                "net_pnl": net_pnl,
+                "profit_factor": pf,
+                "avg_trade_pnl": avg_pnl,
+                "share_pct": share_pct,
+            }
+
+        active = [r for r in results.values() if r["trades_count"] > 0]
+        best_t = max(active, key=lambda x: x["net_pnl"])["key"] if active else None
+
+        a_grades_cnt = results["A_PLUS"]["trades_count"] + results["A_TIER"]["trades_count"]
+        a_discipline_pct = round(a_grades_cnt / total_cnt * 100.0, 1)
+
+        c_losses = [float(t.net_pnl or 0.0) for t in bucketed["C_TIER"] if float(t.net_pnl or 0.0) < 0]
+        c_loss_drag = round(abs(sum(c_losses)), 2)
+
+        a_pnl = results["A_PLUS"]["net_pnl"] + results["A_TIER"]["net_pnl"]
+
+        if c_loss_drag > 0:
+            insight = f"Сетапы A+/A принесли ${a_pnl:+,.2f} • Ущерб от сделок класса C: -${c_loss_drag:,.2f}"
+        else:
+            insight = f"Доля эталонных сделок (A+/A): {a_discipline_pct}% • Высокая дисциплина отбора"
+
+        return {
+            "tiers": results,
+            "best_tier": best_t,
+            "a_tier_discipline_pct": a_discipline_pct,
+            "c_tier_loss_drag": c_loss_drag,
+            "setup_grading_insight": insight,
+            "total_trades": total_cnt,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[
