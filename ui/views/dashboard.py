@@ -438,7 +438,12 @@ class DashboardView(ft.Container):
         card.on_hover = _on_hover
         return card
 
-    def _build_monte_carlo_cone_card(self, trades: List[Trade], initial_balance: float = 10000.0) -> ft.Container:
+    def _build_monte_carlo_cone_card(
+        self,
+        trades: List[Trade],
+        initial_balance: float = 10000.0,
+        metrics: Optional[Any] = None,
+    ) -> ft.Container:
         """
         Блок 'Квантовая симуляция Монте-Карло' с веером вероятностей (Probability Cone).
         Основан на 10 000 итерациях векторного бутстрэпа из AnalyticsService.simulate_monte_carlo.
@@ -565,11 +570,20 @@ class DashboardView(ft.Container):
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     ),
 
-                    # 2. Метрики риска в 3 колонки без наслоений
+                    # 2. Квантовые метрики и стресс-тест в 4 адаптивных бокса
                     ft.Row(
                         controls=[
                             self._metric_mini_box("Risk of Ruin", f"< {mc['risk_of_ruin']}%", PROFIT if mc["risk_of_ruin"] < 5 else LOSS),
-                            self._metric_mini_box("95% VaR Max DD", f"-{mc['var_95_max_dd']}%", LOSS),
+                            self._metric_mini_box(
+                                "SQN Ван Тарпа",
+                                f"{metrics.sqn:.2f}" if metrics and metrics.sqn > 0 else "—",
+                                PROFIT if (metrics and metrics.sqn >= 2.0) else (WARNING_TILT if (metrics and metrics.sqn >= 1.6) else TEXT_SECONDARY),
+                            ),
+                            self._metric_mini_box(
+                                "Sharpe / Sortino",
+                                f"{metrics.sharpe_ratio:.1f} / {metrics.sortino_ratio:.1f}" if metrics and (metrics.sharpe_ratio != 0 or metrics.sortino_ratio != 0) else "—",
+                                PROFIT if (metrics and metrics.sharpe_ratio >= 1.0) else (WARNING_TILT if (metrics and metrics.sharpe_ratio >= 0) else LOSS),
+                            ),
                             self._metric_mini_box("Expectancy Run", f"{mc['expectancy_run']:+,.1f}%", PROFIT if mc["expectancy_run"] >= 0 else LOSS),
                         ],
                         spacing=8,
@@ -909,10 +923,10 @@ class DashboardView(ft.Container):
                     self._build_metric_card(
                         "R-Multiple",
                         r_multiple_val,
-                        subtitle="Ср. риск/прибыль",
+                        subtitle=f"SQN {metrics.sqn:.2f} • {metrics.sqn_rating.split()[0]}" if metrics.sqn_rating != "N/A" else "Ср. риск/прибыль",
                         tag="QUANT",
                         val_color=ACCENT_PRIMARY,
-                        has_glow=(metrics.avg_r_multiple >= 2.0),
+                        has_glow=(metrics.avg_r_multiple >= 2.0 or metrics.sqn >= 2.0),
                     ),
                     col={"sm": 6, "md": 4, "lg": 1.6},
                 ),
@@ -929,7 +943,7 @@ class DashboardView(ft.Container):
 
         # 3. Обновление блока Монте-Карло (Error Boundary)
         try:
-            self.monte_carlo_container.content = self._build_monte_carlo_cone_card(trades, initial_balance=init_bal)
+            self.monte_carlo_container.content = self._build_monte_carlo_cone_card(trades, initial_balance=init_bal, metrics=metrics)
         except Exception as e:
             logging.exception(f"[DashboardView] Error rendering Monte Carlo: {e}")
             self.monte_carlo_container.content = ft.Container(

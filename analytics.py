@@ -49,6 +49,10 @@ class DashboardMetrics:
     total_swap_fees: float = 0.0      # Суммарный фандинг / свопы ($)
     total_broker_costs: float = 0.0   # Суммарные издержки брокера ($)
     fee_drag_pct: float = 0.0         # Fee Drag: % комиссий от Gross Profit
+    sqn: float = 0.0                  # System Quality Number (Van Tharp)
+    sqn_rating: str = "N/A"           # Рейтинг системы: Poor, Average, Good, Excellent, Holy Grail
+    sharpe_ratio: float = 0.0         # Коэффициент Шарпа (per-trade)
+    sortino_ratio: float = 0.0        # Коэффициент Сортино (downside deviation)
 
 
 TradingMetrics = DashboardMetrics
@@ -325,6 +329,48 @@ class AnalyticsService:
             p_f = round(g_w / g_l, 2) if g_l > 0 else (99.9 if g_w > 0 else 1.0)
             pf_spark.append(min(p_f, 10.0))
 
+        # 8. Квантовые метрики: SQN (Van Tharp), Sharpe и Sortino ratios
+        r_multiples = [t.r_multiple for t in target_trades if t.r_multiple is not None]
+        if len(r_multiples) >= 3:
+            mean_r = float(np.mean(r_multiples))
+            std_r = float(np.std(r_multiples, ddof=1)) if len(r_multiples) > 1 else 0.0
+            if std_r > 0.0001:
+                sqn_raw = math.sqrt(min(len(r_multiples), 100)) * (mean_r / std_r)
+                sqn_val = round(float(sqn_raw), 2)
+            else:
+                sqn_val = 0.0
+        else:
+            sqn_val = 0.0
+
+        if len(r_multiples) < 3 or sqn_val == 0.0:
+            sqn_grade = "N/A"
+        elif sqn_val < 1.6:
+            sqn_grade = "Слабая (<1.6)"
+        elif sqn_val < 2.0:
+            sqn_grade = "Средняя (1.6-2.0)"
+        elif sqn_val < 2.5:
+            sqn_grade = "Хорошая (2.0-2.5)"
+        elif sqn_val < 3.0:
+            sqn_grade = "Отличная (2.5-3.0)"
+        elif sqn_val < 5.0:
+            sqn_grade = "Великолепная (3.0-5.0)"
+        else:
+            sqn_grade = "Святой Грааль (>5.0)"
+
+        if len(pnls) >= 2:
+            mean_pnl = float(np.mean(pnls))
+            std_pnl = float(np.std(pnls, ddof=1))
+            sharpe = round(mean_pnl / std_pnl, 2) if std_pnl > 0.0001 else 0.0
+            downside = [p for p in pnls if p < 0]
+            if downside:
+                downside_std = float(np.std(downside, ddof=1)) if len(downside) > 1 else abs(downside[0])
+                sortino = round(mean_pnl / downside_std, 2) if downside_std > 0.0001 else 0.0
+            else:
+                sortino = round(sharpe * 1.5, 2) if sharpe > 0 else 0.0
+        else:
+            sharpe = 0.0
+            sortino = 0.0
+
         metrics_obj = DashboardMetrics(
             total_trades=total,
             winning_trades=len(wins),
@@ -348,6 +394,10 @@ class AnalyticsService:
             total_swap_fees=total_swap,
             total_broker_costs=total_broker_costs,
             fee_drag_pct=fee_drag,
+            sqn=sqn_val,
+            sqn_rating=sqn_grade,
+            sharpe_ratio=sharpe,
+            sortino_ratio=sortino,
         )
 
         # Validation Pipeline: проверка и замена NaN/Inf на 0.0

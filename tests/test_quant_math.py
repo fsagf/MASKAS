@@ -187,3 +187,58 @@ def test_tilt_detection_rules():
     is_tilt, reason = AnalyticsService.detect_tilt(candidate_overrisk, [t1_loss, t2_loss])
     assert is_tilt is True
     assert "риска" in reason.lower() or "risk" in reason.lower()
+
+
+def test_sqn_and_sharpe_sortino_metrics():
+    """Verify System Quality Number (Van Tharp) and Sharpe / Sortino quant ratios."""
+    # Create a sequence of trades with consistent positive R-multiples
+    trades = [
+        Trade(
+            ticker="BTC/USDT",
+            direction="LONG",
+            entry_price=50000.0,
+            exit_price=52000.0,
+            volume=1.0,
+            stop_loss=49000.0,  # Risk = 1000, PnL = +2000 -> R = +2.0
+            closed_at=datetime.datetime(2026, 3, 1, 10, 0),
+        ),
+        Trade(
+            ticker="ETH/USDT",
+            direction="LONG",
+            entry_price=3000.0,
+            exit_price=3150.0,
+            volume=10.0,
+            stop_loss=2900.0,  # Risk = 1000, PnL = +1500 -> R = +1.5
+            closed_at=datetime.datetime(2026, 3, 1, 12, 0),
+        ),
+        Trade(
+            ticker="SOL/USDT",
+            direction="LONG",
+            entry_price=100.0,
+            exit_price=118.0,
+            volume=100.0,
+            stop_loss=90.0,  # Risk = 1000, PnL = +1800 -> R = +1.8
+            closed_at=datetime.datetime(2026, 3, 1, 14, 0),
+        ),
+        Trade(
+            ticker="AVAX/USDT",
+            direction="LONG",
+            entry_price=40.0,
+            exit_price=38.0,
+            volume=500.0,
+            stop_loss=38.0,  # Risk = 1000, PnL = -1000 -> R = -1.0
+            closed_at=datetime.datetime(2026, 3, 1, 16, 0),
+        ),
+    ]
+
+    metrics = AnalyticsService.calculate_metrics(trades)
+
+    # 1. SQN should be positive and classified
+    assert metrics.sqn > 0.0
+    assert metrics.sqn_rating != "N/A"
+    assert any(term in metrics.sqn_rating for term in ("Слабая", "Средняя", "Хорошая", "Отличная", "Великолепная"))
+
+    # 2. Sharpe and Sortino ratios should be calculated
+    assert metrics.sharpe_ratio > 0.0
+    assert metrics.sortino_ratio >= metrics.sharpe_ratio  # Sortino typically >= Sharpe when upside dominates
+
