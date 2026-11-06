@@ -127,6 +127,7 @@ class DashboardView(ft.Container):
         self.market_regime_container = ft.Container()
         self.r_distribution_container = ft.Container()
         self.rr_efficiency_container = ft.Container()
+        self.rule_violation_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -292,6 +293,8 @@ class DashboardView(ft.Container):
                 self.r_distribution_container,
                 ft.Container(height=4),
                 self.rr_efficiency_container,
+                ft.Container(height=4),
+                self.rule_violation_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -2602,6 +2605,158 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_rule_violation_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный аудит нарушений правил торгового плана и расчет финансового ущерба (Rule Violations & Financial Drag).
+        """
+        matrix = AnalyticsService.calculate_rule_violation_matrix(trades)
+        rules = matrix["rules"]
+        grade = matrix["discipline_grade"]
+        color = matrix["grade_color"]
+        insight = matrix["discipline_insight"]
+
+        icon_map = {
+            "NO_STOP_LOSS": ft.Icons.SHIELD_OUTLINED,
+            "CHASING_FOMO": ft.Icons.ROCKET_LAUNCH_ROUNDED,
+            "REVENGE_TRADING": ft.Icons.LOCAL_FIRE_DEPARTMENT_ROUNDED,
+            "EARLY_EXIT": ft.Icons.TIMER_OUTLINED,
+            "OVER_LEVERAGED": ft.Icons.SCALE_ROUNDED,
+            "COUNTER_TREND": ft.Icons.SWAP_CALLS_ROUNDED,
+        }
+
+        rule_cards = []
+        for r in rules:
+            r_icon = icon_map.get(r["key"], ft.Icons.WARNING_AMBER_ROUNDED)
+            cnt = r["count"]
+            loss_val = r["dollar_loss"]
+            sev = r["severity"]
+
+            sev_color = "#DC2626" if sev == "CRITICAL" else ("#F59E0B" if sev == "HIGH" else ("#38BDF8" if sev == "MODERATE" else "#10B981"))
+            sev_label = "КРИТИЧНО" if sev == "CRITICAL" else ("ВЫСОКИЙ" if sev == "HIGH" else ("УМЕРЕННЫЙ" if sev == "MODERATE" else "ЧИСТО"))
+
+            sev_chip = ft.Container(
+                content=ft.Text(sev_label, size=9, weight=ft.FontWeight.BOLD, color=sev_color, font_family=FONT_MONO),
+                bgcolor=ft.Colors.with_opacity(0.12, sev_color),
+                padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.3, sev_color)),
+            )
+
+            rc = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        ft.Container(
+                                            content=ft.Icon(r_icon, size=15, color=r["color"]),
+                                            padding=5,
+                                            bgcolor=ft.Colors.with_opacity(0.12, r["color"]),
+                                            border_radius=RADIUS_SM,
+                                        ),
+                                        ft.Text(r["name"], size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ],
+                                    spacing=7,
+                                ),
+                                sev_chip,
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=2),
+                        ft.Row(
+                            controls=[
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Ущерб", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"-${loss_val:,.2f}" if loss_val > 0 else "$0.00", size=13, weight=ft.FontWeight.BOLD, color=LOSS if loss_val > 0 else PROFIT, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Нарушений", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{cnt} сд. ({r['violation_rate_pct']}%)", size=11, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Winrate", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{r['winrate']}%", size=11, weight=ft.FontWeight.W_600, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=10,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.3, sev_color) if sev in ("CRITICAL", "HIGH") else BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 4},
+            )
+            rule_cards.append(rc)
+
+        header_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.GAVEL_ROUNDED, size=13, color=color),
+                    ft.Text(f"{matrix['rules_followed_rate_pct']}% дисциплина ({grade})", size=10, weight=ft.FontWeight.BOLD, color=color, font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, color),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, color)),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.GAVEL_ROUNDED, color="#F59E0B", size=18),
+                                    ft.Text("Аудит соблюдения правил и штрафных утечек", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Rule Violations & Drag)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=rule_cards, spacing=10, run_spacing=10),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, size=13, color=TEXT_MUTED),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -3184,6 +3339,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering RR Efficiency Matrix: {ex_rr}")
             self.rr_efficiency_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга эффективности R:R: {ex_rr}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.12 Обновление матрицы нарушений правил (Error Boundary)
+        try:
+            self.rule_violation_container.content = self._build_rule_violation_card(trades)
+        except Exception as ex_rv:
+            logging.exception(f"[DashboardView] Error rendering Rule Violation Matrix: {ex_rv}")
+            self.rule_violation_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга матрицы нарушений правил: {ex_rv}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

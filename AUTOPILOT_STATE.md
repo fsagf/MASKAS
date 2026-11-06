@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 16 (Completed) -> Starting Iteration 17
+- **Iteration:** 17 (Completed) -> Starting Iteration 18
 - **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 47 Tests Green (100% Passing). R:R Execution Efficiency & Leakage Engine Deployed.
+- **Status:** All 48 Tests Green (100% Passing). Rule Violations & Financial Drag Matrix Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -118,16 +118,23 @@
   - Assigns Trade Execution Grade (`A+`, `B`, `C`, `D`) and produces actionable execution leak insights.
   - Created `_build_rr_efficiency_card` in `ui/views/dashboard.py` with 4 KPI cards (Planned R:R, Realized R, Efficiency %, Leakage $), efficiency progress bar, and grade badge.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (47 tests):**
+- [x] **Rule Violations & Financial Drag Matrix (Iteration 17):**
+  - Implemented `AnalyticsService.calculate_rule_violation_matrix(trades)`: audits trades against 6 fundamental discipline rules (`No Stop Loss`, `FOMO Chasing`, `Revenge Trading`, `Early Exit`, `Over-leveraged Risk`, `Counter-trend`).
+  - Quantifies the exact dollar damage (`dollar_loss`) and violation winrate for each rule.
+  - Calculates Rules Followed Rate % and overall Discipline Grade (`A`, `B`, `C`, `F`).
+  - Identifies the single most costly violation leak across portfolio history.
+  - Created `_build_rule_violation_card` in `ui/views/dashboard.py` featuring 6 responsive violation cards with severity badges (`CRITICAL`, `HIGH`, `MODERATE`, `CLEAN`), drag loss sums, and insight bar.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (48 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 20 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 21 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including R:R Efficiency Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Rule Violation Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 17+)
+## Competitor Backlog (R&D for Iteration 18+)
 - [ ] **TraderSync / EdgeProvider:** Multi-Timeframe Entry Confirmation Matrix (Trend alignment across 1H / 15m / 5m / 1m).
-- [ ] **TradeZella:** Interactive Mistake & Rule Violation Heatmap (Frequency of Revenge Trading, FOMO, Moving Stop Losses vs Dollar Drawdown).
+- [ ] **TradeZella:** Pre-Trade Checklist & Routine Compliance Engine (Plan execution checklist score vs PnL correlation).

@@ -102,6 +102,11 @@ def test_dashboard_view_headless_render():
     assert rr_card is not None
     assert dash.rr_efficiency_container is not None
 
+    # Verify Rule violation audit card renders cleanly
+    rule_card = dash._build_rule_violation_card(trades=[])
+    assert rule_card is not None
+    assert dash.rule_violation_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

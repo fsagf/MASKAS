@@ -848,6 +848,50 @@ def test_rr_efficiency_matrix():
     assert len(mat["leakage_insight"]) > 5
 
 
+def test_rule_violation_matrix():
+    """Verify rule violation categorization, financial drag and discipline grading."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_rule_violation_matrix([])
+    assert len(empty_mat["rules"]) == 6
+    assert empty_mat["rules_followed_rate_pct"] == 100.0
+    assert empty_mat["total_rule_drag"] == 0.0
+
+    # 2. Trades with specific rule violations
+    t_clean = Trade(direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0, stop_loss=90.0, notes="Идеально по сетапу") # +200
+    t_no_sl = Trade(direction="LONG", entry_price=100.0, exit_price=80.0, volume=10.0, stop_loss=None, notes="без стопа") # -200
+    t_fomo = Trade(direction="LONG", entry_price=100.0, exit_price=70.0, volume=10.0, stop_loss=90.0, notes="FOMO погоня") # -300
+    t_revenge = Trade(direction="LONG", entry_price=100.0, exit_price=60.0, volume=10.0, stop_loss=90.0, notes="тильт реванш", is_tilt=True) # -400
+    t_early = Trade(direction="LONG", entry_price=100.0, exit_price=105.0, volume=10.0, stop_loss=90.0, notes="вышел рано от страха") # +50
+    t_over = Trade(direction="LONG", entry_price=100.0, exit_price=85.0, volume=10.0, stop_loss=90.0, notes="завышенный объем") # -150
+
+    trades = [t_clean, t_no_sl, t_fomo, t_revenge, t_early, t_over]
+    mat = AnalyticsService.calculate_rule_violation_matrix(trades)
+
+    assert mat["total_trades"] == 6
+    assert mat["clean_trades_count"] == 1
+    assert mat["rules_followed_rate_pct"] == pytest.approx(16.7, abs=0.2)
+    assert mat["total_rule_drag"] == 1050.0
+    assert mat["most_costly_violation"] == "Тильт / Реванш"
+
+    rule_map = {r["key"]: r for r in mat["rules"]}
+    assert rule_map["NO_STOP_LOSS"]["count"] == 1
+    assert rule_map["NO_STOP_LOSS"]["dollar_loss"] == 200.0
+
+    assert rule_map["CHASING_FOMO"]["count"] == 1
+    assert rule_map["CHASING_FOMO"]["dollar_loss"] == 300.0
+
+    assert rule_map["REVENGE_TRADING"]["count"] == 1
+    assert rule_map["REVENGE_TRADING"]["dollar_loss"] == 400.0
+
+    assert rule_map["EARLY_EXIT"]["count"] == 1
+    assert rule_map["OVER_LEVERAGED"]["count"] == 1
+    assert rule_map["OVER_LEVERAGED"]["dollar_loss"] == 150.0
+
+    assert "F" in mat["discipline_grade"]
+    assert len(mat["discipline_insight"]) > 5
+
+
+
 
 
 

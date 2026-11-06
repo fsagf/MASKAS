@@ -2178,6 +2178,170 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_rule_violation_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ нарушений правил торгового плана и расчет финансового ущерба (Rule Violations & Financial Drag).
+        Классифицирует сделки по 6 фундаментальным ошибкам дисциплины:
+        - NO_STOP_LOSS: Вход без выставленного стоп-лосса
+        - CHASING_FOMO: Вход в уходящий поезд / FOMO
+        - REVENGE_TRADING: Тильт / Попытка отыгрыша после лосса
+        - EARLY_EXIT: Преждевременный выход из позиции из-за страха
+        - OVER_LEVERAGED: Завышение рабочего объема / плеча
+        - COUNTER_TREND: Вход против старшего таймфрейма / тренда
+        """
+        rules_def = [
+            {"key": "NO_STOP_LOSS", "name": "Без стоп-лосса", "desc": "Вход без жесткого ограничения риска", "color": "#EF4444", "icon": "shield_outlined"},
+            {"key": "CHASING_FOMO", "name": "FOMO / Погоня", "desc": "Вход на верхушке свечи из-за страха упустить", "color": "#F59E0B", "icon": "rocket_launch_rounded"},
+            {"key": "REVENGE_TRADING", "name": "Тильт / Реванш", "desc": "Отыгрыш убытка на эмоциях", "color": "#DC2626", "icon": "local_fire_department_rounded"},
+            {"key": "EARLY_EXIT", "name": "Преждевременный выход", "desc": "Закрытие до тейка из-за страха отдачи", "color": "#38BDF8", "icon": "timer_outlined"},
+            {"key": "OVER_LEVERAGED", "name": "Завышение риска (>2%)", "desc": "Превышение лимита риска на сделку", "color": "#A855F7", "icon": "scale_rounded"},
+            {"key": "COUNTER_TREND", "name": "Контртренд", "desc": "Вход против тренда старшего таймфрейма", "color": "#EC4899", "icon": "swap_calls_rounded"},
+        ]
+
+        if not trades:
+            empty_rules = []
+            for r in rules_def:
+                empty_rules.append({
+                    **r,
+                    "count": 0,
+                    "violation_rate_pct": 0.0,
+                    "dollar_loss": 0.0,
+                    "winrate": 0.0,
+                    "severity": "CLEAN",
+                })
+            return {
+                "rules": empty_rules,
+                "rules_followed_rate_pct": 100.0,
+                "clean_trades_count": 0,
+                "total_rule_drag": 0.0,
+                "most_costly_violation": None,
+                "discipline_grade": "N/A",
+                "grade_color": "#94A3B8",
+                "discipline_insight": "Нет данных по сделкам для аудита нарушений",
+                "total_trades": 0,
+            }
+
+        def get_violations_for_trade(t: Trade) -> List[str]:
+            v = []
+            notes = (getattr(t, "notes", "") or "").lower()
+            strat = (getattr(t, "strategy_tag", "") or "").lower()
+
+            # 1. NO_STOP_LOSS
+            sl = float(t.stop_loss or 0.0)
+            if sl <= 0 or "без стоп" in notes or "no sl" in notes:
+                v.append("NO_STOP_LOSS")
+
+            # 2. CHASING_FOMO
+            if any(w in notes or w in strat for w in ["fomo", "фомо", "погоня", "chase"]) or getattr(t, "is_fomo", False):
+                v.append("CHASING_FOMO")
+
+            # 3. REVENGE_TRADING
+            if getattr(t, "is_tilt", False) or any(w in notes or w in strat for w in ["revenge", "реванш", "тильт"]):
+                v.append("REVENGE_TRADING")
+
+            # 4. EARLY_EXIT
+            if any(w in notes or w in strat for w in ["рано", "early", "паника", "недосидел"]):
+                v.append("EARLY_EXIT")
+
+            # 5. OVER_LEVERAGED
+            init_risk = float(getattr(t, "initial_risk", 0.0) or 0.0)
+            if any(w in notes or w in strat for w in ["объем", "плечо", "overrisk", "завышен"]) or init_risk > 500:
+                v.append("OVER_LEVERAGED")
+
+            # 6. COUNTER_TREND
+            if any(w in notes or w in strat for w in ["контртренд", "counter", "против тренда"]):
+                v.append("COUNTER_TREND")
+
+            return v
+
+        total_cnt = len(trades)
+        rule_buckets: Dict[str, List[Trade]] = {r["key"]: [] for r in rules_def}
+        clean_trades = 0
+
+        for t in trades:
+            viols = get_violations_for_trade(t)
+            if not viols:
+                clean_trades += 1
+            else:
+                for v_key in viols:
+                    rule_buckets[v_key].append(t)
+
+        rules_result = []
+        total_drag = 0.0
+
+        for r in rules_def:
+            r_key = r["key"]
+            b_trades = rule_buckets[r_key]
+            cnt = len(b_trades)
+            rate_pct = round(cnt / total_cnt * 100.0, 1)
+
+            pnls = [float(t.net_pnl or 0.0) for t in b_trades]
+            losses = [p for p in pnls if p < 0]
+            loss_sum = round(abs(sum(losses)), 2)
+            total_drag += loss_sum
+
+            wins = [p for p in pnls if p > 0]
+            winrate = round(len(wins) / cnt * 100.0, 1) if cnt > 0 else 0.0
+
+            if loss_sum > 1000 or (cnt >= 3 and winrate < 30.0):
+                severity = "CRITICAL"
+            elif loss_sum > 400 or cnt >= 2:
+                severity = "HIGH"
+            elif cnt > 0:
+                severity = "MODERATE"
+            else:
+                severity = "CLEAN"
+
+            rules_result.append({
+                **r,
+                "count": cnt,
+                "violation_rate_pct": rate_pct,
+                "dollar_loss": loss_sum,
+                "winrate": winrate,
+                "severity": severity,
+            })
+
+        followed_pct = round(clean_trades / total_cnt * 100.0, 1)
+        total_drag = round(total_drag, 2)
+
+        # Поиск самого дорогого нарушения
+        active_rules = [r for r in rules_result if r["count"] > 0]
+        if active_rules:
+            most_costly = max(active_rules, key=lambda x: (x["dollar_loss"], x["count"]))
+        else:
+            most_costly = None
+
+        if followed_pct >= 90.0:
+            grade = "A (Строгая дисциплина)"
+            color = "#10B981"
+        elif followed_pct >= 75.0:
+            grade = "B (Умеренный контроль)"
+            color = "#38BDF8"
+        elif followed_pct >= 55.0:
+            grade = "C (Периодические срывы)"
+            color = "#F59E0B"
+        else:
+            grade = "F (Хроническое нарушение правил)"
+            color = "#EF4444"
+
+        if most_costly and most_costly["dollar_loss"] > 0:
+            insight = f"Ущерб от нарушений: -${total_drag:,.2f} • Главная утечка: '{most_costly['name']}' (-${most_costly['dollar_loss']:,.2f})"
+        else:
+            insight = f"Соблюдение правил: {followed_pct}% • Критических утечек не зафиксировано"
+
+        return {
+            "rules": rules_result,
+            "rules_followed_rate_pct": followed_pct,
+            "clean_trades_count": clean_trades,
+            "total_rule_drag": total_drag,
+            "most_costly_violation": most_costly["name"] if most_costly else "Нет",
+            "discipline_grade": grade,
+            "grade_color": color,
+            "discipline_insight": insight,
+            "total_trades": total_cnt,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[
