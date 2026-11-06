@@ -44,6 +44,7 @@ def test_dashboard_view_headless_render():
     assert hasattr(dash, "psychology_matrix_container")
     assert hasattr(dash, "drawdown_recovery_container")
     assert hasattr(dash, "excursion_matrix_container")
+    assert hasattr(dash, "monthly_phase_container")
     assert hasattr(dash, "time_heatmap")
     assert hasattr(dash, "pnl_calendar")
     assert hasattr(dash, "tilt_switch")
@@ -76,6 +77,10 @@ def test_dashboard_view_headless_render():
     # Verify excursion matrix card renders cleanly
     exc_card = dash._build_excursion_card(trades=[])
     assert exc_card is not None
+
+    # Verify monthly phase card renders cleanly
+    phase_card = dash._build_monthly_phase_card(trades=[])
+    assert phase_card is not None
 
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None

@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 11 (Completed) -> Starting Iteration 12
+- **Iteration:** 12 (Completed) -> Starting Iteration 13
 - **Current Phase:** Phase 4: Full Regression & Close Loop
-- **Status:** All 42 Tests Green (100% Passing). TradeZella MAE/MFE Excursion Matrix & Edge Ratio Engine Deployed.
+- **Status:** All 43 Tests Green (100% Passing). Day-of-Month Performance & Seasonal Alpha Matrix Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -87,16 +87,22 @@
   - Estimates Left-on-the-Table unrealized dollar amount for winning trades with sub-optimal exits.
   - Created `_build_excursion_card` in `ui/views/dashboard.py` with 4 execution quality KPI cards (Edge Ratio, Avg MFE, Avg MAE, Retention Efficiency %) and Edge Ratio header badge.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (42 tests):**
+- [x] **Day-of-Month Performance & Seasonal Alpha Matrix (Iteration 12):**
+  - Implemented `AnalyticsService.calculate_monthly_phase_matrix(trades)`: segments trades by month decades (`EARLY_MONTH` 1st-10th, `MID_MONTH` 11th-20th, `LATE_MONTH` 21st-31st).
+  - Computes Winrate %, Net PnL, Profit Factor, Average Trade PnL, and Total Trades for each phase.
+  - Identifies Top Edge Phase and seasonal performance insight.
+  - Created `_build_monthly_phase_card` in `ui/views/dashboard.py` with 3 phase cards, winrate progress bars, peak edge badge, and insight header chip.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (43 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 15 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 16 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Excursion Matrix card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Monthly Phase card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 12+)
-- [ ] **TraderSync / Edgewonk:** Day-of-Month Performance & Seasonal Alpha Matrix (identifying most profitable days of calendar month: 1st-10th, 11th-20th, 21st-31st).
-- [ ] **QuantConnect:** Optimal Position Sizing & Fractional Risk Curve Simulator.
+## Competitor Backlog (R&D for Iteration 13+)
+- [ ] **QuantConnect / PortfolioVisualizer:** Position Sizing & Fractional Risk Curve Simulator (comparing Flat 1%, Half-Kelly, Full Kelly, and Fixed Dollar sizing models on historical equity curve).
+- [ ] **TradeZella:** Playbook Setup Winrate vs Market Trend Alignment Matrix (Bullish vs Bearish vs Choppy regimes).

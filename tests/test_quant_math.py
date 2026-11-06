@@ -667,6 +667,51 @@ def test_excursion_matrix():
     assert exc["avg_efficiency_pct"] > 0.0
 
 
+def test_monthly_phase_matrix():
+    """Verify TraderSync/Edgewonk-style monthly decade partitioning and seasonal cyclicity."""
+    # 1. Empty trades
+    empty_p = AnalyticsService.calculate_monthly_phase_matrix([])
+    assert set(empty_p["phases"].keys()) == {"EARLY_MONTH", "MID_MONTH", "LATE_MONTH"}
+    assert empty_p["best_phase"] is None
+
+    # 2. Trades in different decades of March 2026
+    # Early (day 5): +500
+    t_early = Trade(
+        direction="LONG", entry_price=100.0, exit_price=150.0, volume=10.0,
+        closed_at=datetime.datetime(2026, 3, 5, 12, 0),
+    )
+    # Mid (day 15): +200
+    t_mid = Trade(
+        direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0,
+        closed_at=datetime.datetime(2026, 3, 15, 12, 0),
+    )
+    # Late (day 25): -100
+    t_late = Trade(
+        direction="LONG", entry_price=100.0, exit_price=90.0, volume=10.0,
+        closed_at=datetime.datetime(2026, 3, 25, 12, 0),
+    )
+
+    trades = [t_early, t_mid, t_late]
+    mat = AnalyticsService.calculate_monthly_phase_matrix(trades)
+    phases = mat["phases"]
+
+    assert phases["EARLY_MONTH"]["trades_count"] == 1
+    assert phases["EARLY_MONTH"]["net_pnl"] == 500.0
+    assert phases["EARLY_MONTH"]["winrate"] == 100.0
+
+    assert phases["MID_MONTH"]["trades_count"] == 1
+    assert phases["MID_MONTH"]["net_pnl"] == 200.0
+
+    assert phases["LATE_MONTH"]["trades_count"] == 1
+    assert phases["LATE_MONTH"]["net_pnl"] == -100.0
+    assert phases["LATE_MONTH"]["winrate"] == 0.0
+
+    assert mat["best_phase"] == "EARLY_MONTH"
+    assert mat["worst_phase"] == "LATE_MONTH"
+    assert "Начало месяца" in mat["seasonal_insight"]
+
+
+
 
 
 

@@ -1473,6 +1473,138 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_monthly_phase_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ циклических фаз месяца и сезонности (TraderSync / Edgewonk Monthly Phase Matrix).
+        Разбивает сделки на 3 декады месяца:
+        - EARLY_MONTH (1–10 число): Приток институциональной ликвидности, NFP, PMI.
+        - MID_MONTH (11–20 число): Инфляционные релизы CPI/PPI, заседание FOMC.
+        - LATE_MONTH (21–31 число): Экспирация опционов OPEX, фиксация кварталов/месяцев.
+        """
+        phases_def = {
+            "EARLY_MONTH": {
+                "key": "EARLY_MONTH",
+                "name": "Начало месяца (1-10)",
+                "sub": "NFP / Новые потоки ликвидности",
+                "color": "#10B981",
+                "icon": "calendar_today_rounded",
+            },
+            "MID_MONTH": {
+                "key": "MID_MONTH",
+                "name": "Середина месяца (11-20)",
+                "sub": "CPI / PPI / Заседания FOMC",
+                "color": "#6366F1",
+                "icon": "event_repeat_rounded",
+            },
+            "LATE_MONTH": {
+                "key": "LATE_MONTH",
+                "name": "Конец месяца (21-31)",
+                "sub": "OPEX Экспирация / Ребалансировка",
+                "color": "#F59E0B",
+                "icon": "event_available_rounded",
+            },
+        }
+
+        if not trades:
+            empty_phases = {}
+            for k, meta in phases_def.items():
+                empty_phases[k] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                }
+            return {
+                "phases": empty_phases,
+                "best_phase": None,
+                "worst_phase": None,
+                "seasonal_insight": "Циклический анализ месяца активен",
+                "total_trades": 0,
+            }
+
+        bucketed: Dict[str, List[Trade]] = {k: [] for k in phases_def}
+
+        for t in trades:
+            dt = t.closed_at or t.opened_at or getattr(t, "date", None)
+            if not dt:
+                bucketed["MID_MONTH"].append(t)
+                continue
+            if isinstance(dt, str):
+                try:
+                    dt = datetime.fromisoformat(dt.replace("Z", "+00:00"))
+                except Exception:
+                    dt = datetime.now()
+
+            day = dt.day
+            if 1 <= day <= 10:
+                bucketed["EARLY_MONTH"].append(t)
+            elif 11 <= day <= 20:
+                bucketed["MID_MONTH"].append(t)
+            else:
+                bucketed["LATE_MONTH"].append(t)
+
+        results = {}
+        for p_key, p_trades in bucketed.items():
+            meta = phases_def[p_key]
+            cnt = len(p_trades)
+            if cnt == 0:
+                results[p_key] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                }
+                continue
+
+            pnls = [float(t.net_pnl or 0.0) for t in p_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / cnt * 100, 1)
+            net_pnl = round(float(sum(pnls)), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            avg_pnl = round(net_pnl / cnt, 2)
+
+            results[p_key] = {
+                **meta,
+                "trades_count": cnt,
+                "win_trades": len(wins),
+                "loss_trades": len(losses),
+                "winrate": winrate,
+                "net_pnl": net_pnl,
+                "profit_factor": pf,
+                "avg_trade_pnl": avg_pnl,
+            }
+
+        active = [p for p in results.values() if p["trades_count"] > 0]
+        best_p = max(active, key=lambda x: x["net_pnl"])["key"] if active else None
+        worst_p = min(active, key=lambda x: x["net_pnl"])["key"] if active else None
+
+        if best_p:
+            b_meta = results[best_p]
+            insight = f"Пик прибыльности: {b_meta['name']} -> {b_meta['net_pnl']:+,.2f} $ (Winrate {b_meta['winrate']}%)"
+        else:
+            insight = "Циклический анализ месяца активен"
+
+        return {
+            "phases": results,
+            "best_phase": best_p,
+            "worst_phase": worst_p,
+            "seasonal_insight": insight,
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[
