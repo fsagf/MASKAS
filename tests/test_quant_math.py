@@ -929,6 +929,38 @@ def test_mtf_alignment_matrix():
     assert len(mat["mtf_insight"]) > 10
 
 
+def test_compliance_routine_matrix():
+    """Verify pre-trade checklist compliance, score distribution and alpha correlation."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_compliance_routine_matrix([])
+    assert set(empty_mat["brackets"].keys()) == {"HIGH", "MODERATE", "LOW"}
+    assert empty_mat["avg_compliance_pct"] == 0.0
+    assert empty_mat["compliance_grade"] == "N/A"
+
+    # 2. Trades with distinct compliance profiles
+    # High: SL set, R:R 3.0, clean, strategy tag
+    t_high = Trade(direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0, stop_loss=90.0, take_profit=130.0, strategy_tag="Breakout", notes="по плану") # +300
+    # Moderate: SL set, no hard TP, clean, strategy tag
+    t_mod = Trade(direction="LONG", entry_price=100.0, exit_price=110.0, volume=10.0, stop_loss=90.0, strategy_tag="Scalp", notes="") # +100
+    # Low: No SL, no TP, no strategy, tilt in notes
+    t_low = Trade(direction="LONG", entry_price=100.0, exit_price=70.0, volume=10.0, stop_loss=None, notes="тильт FOMO вход", is_tilt=True) # -300
+
+    trades = [t_high, t_mod, t_low]
+    mat = AnalyticsService.calculate_compliance_routine_matrix(trades)
+    b = mat["brackets"]
+
+    assert mat["total_trades"] == 3
+    assert b["HIGH"]["trades_count"] >= 1
+    assert b["LOW"]["trades_count"] == 1
+    assert b["LOW"]["net_pnl"] == -300.0
+    assert b["LOW"]["winrate"] == 0.0
+
+    assert mat["avg_compliance_pct"] > 50.0
+    assert mat["criteria_compliance"]["STOP_LOSS"] == pytest.approx(66.7, abs=0.5)
+    assert len(mat["compliance_insight"]) > 10
+
+
+
 
 
 

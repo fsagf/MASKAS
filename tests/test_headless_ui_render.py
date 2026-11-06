@@ -112,6 +112,11 @@ def test_dashboard_view_headless_render():
     assert mtf_card is not None
     assert dash.mtf_alignment_container is not None
 
+    # Verify Pre-Trade compliance routine card renders cleanly
+    comp_card = dash._build_compliance_routine_card(trades=[])
+    assert comp_card is not None
+    assert dash.compliance_routine_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

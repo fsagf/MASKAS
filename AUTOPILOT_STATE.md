@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 18 (Completed) -> Starting Iteration 19
+- **Iteration:** 19 (Completed) -> Starting Iteration 20
 - **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 49 Tests Green (100% Passing). Multi-Timeframe Trend Alignment Matrix Deployed.
+- **Status:** All 50 Tests Green (100% Passing). Pre-Trade Routine & Checklist Compliance Engine Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -131,16 +131,22 @@
   - Discovers top institutional edge alignment and provides actionable confluence insights.
   - Created `_build_mtf_alignment_card` in `ui/views/dashboard.py` with 4 responsive trend confluence cards, winrate progress bars, TOP EDGE badge, and insight header chip.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (49 tests):**
+- [x] **Pre-Trade Checklist & Routine Compliance Engine (Iteration 19):**
+  - Implemented `AnalyticsService.calculate_compliance_routine_matrix(trades)`: evaluates 5 core institutional pre-flight checklist criteria (Hard Stop Loss, R:R >= 1:2.0, Emotional Self-Control, Setup Trigger, and No FOMO).
+  - Categorizes trades into 3 compliance brackets (`High 80-100%`, `Moderate 60-79%`, `Low <60%`) and isolates the exact statistical winrate and dollar edge of disciplined trading.
+  - Computes Compliance Grade (`A+`, `B`, `C`, `F`) and per-criterion compliance percentages.
+  - Created `_build_compliance_routine_card` in `ui/views/dashboard.py` with 3 responsive bracket cards, 4 criteria progress bars, and alpha correlation insight bar.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (50 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 22 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 23 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including MTF Alignment Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Compliance Routine Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 19+)
-- [ ] **TradeZella:** Pre-Trade Checklist & Routine Compliance Engine (Plan execution checklist score vs PnL correlation).
+## Competitor Backlog (R&D for Iteration 20+)
 - [ ] **TraderSync:** Setup Grading & Quality Score Matrix (A+ / B / C Playbook Execution Winrate & Profit Factor).
+- [ ] **Edgewonk / TradeZella:** Market Session Overlap Alpha Matrix (London/NY overlap vs Tokyo/London transition edge).

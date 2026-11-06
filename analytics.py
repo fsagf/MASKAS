@@ -2491,6 +2491,153 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_compliance_routine_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ соблюдения чек-листа перед входом в сделку и регламента (Pre-Trade Routine & Checklist Compliance).
+        Оценивает каждую сделку по 5 ключевым критериям институционального чек-листа (до 100%):
+        1. Наличие жесткого Stop Loss (+20%)
+        2. Соблюдение R:R >= 1:2.0 (+20%)
+        3. Эмоциональный контроль (Без тильта / реванша) (+20%)
+        4. Наличие формализованного сетапа / триггера (+20%)
+        5. Отсутствие FOMO / погони за ценой (+20%)
+        """
+        criteria_def = [
+            {"key": "STOP_LOSS", "name": "Защитный стоп", "desc": "Ограничение риска до входа", "weight": 20},
+            {"key": "RR_RATIO", "name": "R:R >= 1:2.0", "desc": "Потенциал прибыли превышает риск", "weight": 20},
+            {"key": "EMOTION_CONTROL", "name": "Самоконтроль", "desc": "Холодный расчет без тильта", "weight": 20},
+            {"key": "SETUP_TRIGGER", "name": "Сетап-триггер", "desc": "Вход по паттерну стратегии", "weight": 20},
+            {"key": "NO_FOMO", "name": "Без FOMO", "desc": "Вход по запланированной цене", "weight": 20},
+        ]
+
+        if not trades:
+            empty_brackets = {
+                "HIGH": {"key": "HIGH", "name": "Высокая дисциплина (80-100%)", "trades_count": 0, "winrate": 0.0, "net_pnl": 0.0, "profit_factor": 0.0, "color": "#10B981"},
+                "MODERATE": {"key": "MODERATE", "name": "Умеренный контроль (60-79%)", "trades_count": 0, "winrate": 0.0, "net_pnl": 0.0, "profit_factor": 0.0, "color": "#38BDF8"},
+                "LOW": {"key": "LOW", "name": "Импульсивные сделки (<60%)", "trades_count": 0, "winrate": 0.0, "net_pnl": 0.0, "profit_factor": 0.0, "color": "#EF4444"},
+            }
+            return {
+                "brackets": empty_brackets,
+                "avg_compliance_pct": 0.0,
+                "criteria_compliance": {c["key"]: 0.0 for c in criteria_def},
+                "compliance_grade": "N/A",
+                "grade_color": "#94A3B8",
+                "winrate_alpha_delta": 0.0,
+                "compliance_insight": "Нет закрытых сделок для аудита чек-листа",
+                "total_trades": 0,
+            }
+
+        crit_hits: Dict[str, int] = {c["key"]: 0 for c in criteria_def}
+        trade_scores: List[Tuple[Trade, float]] = []
+
+        for t in trades:
+            score = 0.0
+            notes = (getattr(t, "notes", "") or "").lower()
+            strat = (getattr(t, "strategy_tag", "") or "").lower()
+            ep = float(t.entry_price or 100.0)
+            sl = float(t.stop_loss or 0.0)
+            tp = float(t.take_profit or 0.0)
+
+            # 1. Stop Loss check
+            if sl > 0 and abs(ep - sl) > 0:
+                score += 20.0
+                crit_hits["STOP_LOSS"] += 1
+
+            # 2. R:R check
+            if sl > 0 and tp > 0 and abs(ep - sl) > 0:
+                if abs(tp - ep) / abs(ep - sl) >= 1.8:
+                    score += 20.0
+                    crit_hits["RR_RATIO"] += 1
+            elif getattr(t, "r_multiple", None) is not None and float(t.r_multiple) >= 1.5:
+                score += 20.0
+                crit_hits["RR_RATIO"] += 1
+            else:
+                score += 10.0
+                crit_hits["RR_RATIO"] += 1
+
+            # 3. Emotion control check
+            if not getattr(t, "is_tilt", False) and not any(w in notes for w in ["тильт", "revenge", "реванш", "отыгрыш"]):
+                score += 20.0
+                crit_hits["EMOTION_CONTROL"] += 1
+
+            # 4. Setup trigger check
+            if strat and strat not in ("default", "none", "—") or any(w in notes for w in ["сетап", "паттерн", "пробой", "уровень", "fvg", "order block"]):
+                score += 20.0
+                crit_hits["SETUP_TRIGGER"] += 1
+
+            # 5. No FOMO check
+            if not getattr(t, "is_fomo", False) and not any(w in notes for w in ["fomo", "фомо", "погоня", "chase"]):
+                score += 20.0
+                crit_hits["NO_FOMO"] += 1
+
+            trade_scores.append((t, score))
+
+        total_cnt = len(trades)
+        high_group = [t for t, s in trade_scores if s >= 80.0]
+        mod_group = [t for t, s in trade_scores if 60.0 <= s < 80.0]
+        low_group = [t for t, s in trade_scores if s < 60.0]
+
+        def calc_bucket_kpis(b_trades: List[Trade], name: str, key: str, color: str) -> Dict[str, Any]:
+            cnt = len(b_trades)
+            if cnt == 0:
+                return {"key": key, "name": name, "trades_count": 0, "winrate": 0.0, "net_pnl": 0.0, "profit_factor": 0.0, "color": color}
+            pnls = [float(t.net_pnl or 0.0) for t in b_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+            return {
+                "key": key,
+                "name": name,
+                "trades_count": cnt,
+                "winrate": round(len(wins) / cnt * 100.0, 1),
+                "net_pnl": round(sum(pnls), 2),
+                "profit_factor": round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0),
+                "color": color,
+            }
+
+        brackets = {
+            "HIGH": calc_bucket_kpis(high_group, "Высокая дисциплина (80-100%)", "HIGH", "#10B981"),
+            "MODERATE": calc_bucket_kpis(mod_group, "Умеренный контроль (60-79%)", "MODERATE", "#38BDF8"),
+            "LOW": calc_bucket_kpis(low_group, "Импульсивные сделки (<60%)", "LOW", "#EF4444"),
+        }
+
+        avg_score = round(sum(s for _, s in trade_scores) / total_cnt, 1)
+        crit_pcts = {k: round(v / total_cnt * 100.0, 1) for k, v in crit_hits.items()}
+
+        high_wr = brackets["HIGH"]["winrate"]
+        low_wr = brackets["LOW"]["winrate"]
+        alpha_delta = round(high_wr - low_wr, 1) if brackets["LOW"]["trades_count"] > 0 else 0.0
+
+        if avg_score >= 80.0:
+            grade = "A+ (Системный регламент)"
+            grade_color = "#10B981"
+        elif avg_score >= 65.0:
+            grade = "B (Рабочий контроль)"
+            grade_color = "#38BDF8"
+        elif avg_score >= 50.0:
+            grade = "C (Нужна дисциплина)"
+            grade_color = "#F59E0B"
+        else:
+            grade = "F (Хаотичная торговля)"
+            grade_color = "#EF4444"
+
+        if brackets["HIGH"]["trades_count"] > 0 and brackets["LOW"]["trades_count"] > 0:
+            insight = f"Соблюдение чек-листа дает +{alpha_delta}% к винрейту • Net PnL по плану: ${brackets['HIGH']['net_pnl']:+,.2f}"
+        else:
+            insight = f"Среднее соблюдение регламента: {avg_score}% • Профит по плану: ${brackets['HIGH']['net_pnl']:+,.2f}"
+
+        return {
+            "brackets": brackets,
+            "avg_compliance_pct": avg_score,
+            "criteria_compliance": crit_pcts,
+            "compliance_grade": grade,
+            "grade_color": grade_color,
+            "winrate_alpha_delta": alpha_delta,
+            "compliance_insight": insight,
+            "total_trades": total_cnt,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

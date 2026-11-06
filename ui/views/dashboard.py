@@ -129,6 +129,7 @@ class DashboardView(ft.Container):
         self.rr_efficiency_container = ft.Container()
         self.rule_violation_container = ft.Container()
         self.mtf_alignment_container = ft.Container()
+        self.compliance_routine_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -298,6 +299,8 @@ class DashboardView(ft.Container):
                 self.rule_violation_container,
                 ft.Container(height=4),
                 self.mtf_alignment_container,
+                ft.Container(height=4),
+                self.compliance_routine_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -2922,6 +2925,228 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_compliance_routine_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный анализ соблюдения чек-листа перед входом в сделку и регламента (Pre-Trade Routine & Checklist Compliance).
+        """
+        matrix = AnalyticsService.calculate_compliance_routine_matrix(trades)
+        brackets = matrix["brackets"]
+        crits = matrix["criteria_compliance"]
+        grade = matrix["compliance_grade"]
+        color = matrix["grade_color"]
+        insight = matrix["compliance_insight"]
+
+        bracket_cards = []
+        for key in ["HIGH", "MODERATE", "LOW"]:
+            b = brackets[key]
+            pnl_val = b["net_pnl"]
+            pnl_color = PROFIT if pnl_val >= 0 else LOSS
+            pnl_sign = "+" if pnl_val >= 0 else ""
+
+            b_card = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Text(b["name"], size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(f"{b['trades_count']} сд.", size=9, weight=ft.FontWeight.BOLD, color=b["color"], font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.14, b["color"]),
+                                    padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                    border=ft.border.all(1, ft.Colors.with_opacity(0.35, b["color"])),
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=2),
+                        ft.ProgressBar(
+                            value=b["winrate"] / 100.0 if b["trades_count"] > 0 else 0.0,
+                            color=b["color"],
+                            bgcolor=SURFACE_2,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                        ft.Container(height=2),
+                        ft.Row(
+                            controls=[
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Net PnL", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{pnl_sign}${pnl_val:,.2f}", size=13, weight=ft.FontWeight.BOLD, color=pnl_color, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Winrate", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{b['winrate']}%", size=11, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Profit Factor", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{b['profit_factor']:.2f}", size=11, weight=ft.FontWeight.W_600, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.35, b["color"]) if key == "HIGH" else BORDER_SUBTLE),
+                col={"xs": 12, "sm": 4},
+            )
+            bracket_cards.append(b_card)
+
+        # 4 компактных критерия чек-листа в ряд
+        crit_widgets = [
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Text("Стоп-лосс", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Text(f"{crits.get('STOP_LOSS', 0.0):.0f}%", size=10, weight=ft.FontWeight.BOLD, color=PROFIT, font_family=FONT_MONO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.ProgressBar(value=crits.get("STOP_LOSS", 0.0) / 100.0, color=PROFIT, bgcolor=SURFACE_1, height=4, border_radius=RADIUS_SM),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=8,
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Text("R:R >= 2.0", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Text(f"{crits.get('RR_RATIO', 0.0):.0f}%", size=10, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.ProgressBar(value=crits.get("RR_RATIO", 0.0) / 100.0, color=ACCENT_PRIMARY, bgcolor=SURFACE_1, height=4, border_radius=RADIUS_SM),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=8,
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Text("Самоконтроль", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Text(f"{crits.get('EMOTION_CONTROL', 0.0):.0f}%", size=10, weight=ft.FontWeight.BOLD, color="#38BDF8", font_family=FONT_MONO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.ProgressBar(value=crits.get("EMOTION_CONTROL", 0.0) / 100.0, color="#38BDF8", bgcolor=SURFACE_1, height=4, border_radius=RADIUS_SM),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=8,
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Text("Сетап-триггер", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Text(f"{crits.get('SETUP_TRIGGER', 0.0):.0f}%", size=10, weight=ft.FontWeight.BOLD, color="#A855F7", font_family=FONT_MONO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.ProgressBar(value=crits.get("SETUP_TRIGGER", 0.0) / 100.0, color="#A855F7", bgcolor=SURFACE_1, height=4, border_radius=RADIUS_SM),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=8,
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+        ]
+
+        header_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.CHECKLIST_ROUNDED, size=13, color=color),
+                    ft.Text(f"{matrix['avg_compliance_pct']}% Регламент ({grade})", size=10, weight=ft.FontWeight.BOLD, color=color, font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, color),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, color)),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.CHECKLIST_ROUNDED, color="#10B981", size=18),
+                                    ft.Text("Соблюдение чек-листа и торгового регламента", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Pre-Trade Compliance)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=bracket_cards, spacing=10, run_spacing=10),
+                    ft.Container(height=2),
+                    ft.ResponsiveRow(controls=crit_widgets, spacing=8, run_spacing=8),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, size=13, color=TEXT_MUTED),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -3524,6 +3749,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering MTF Alignment Matrix: {ex_mtf}")
             self.mtf_alignment_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга MTF матрицы: {ex_mtf}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.14 Обновление комплаенса предторгового чек-листа (Error Boundary)
+        try:
+            self.compliance_routine_container.content = self._build_compliance_routine_card(trades)
+        except Exception as ex_cp:
+            logging.exception(f"[DashboardView] Error rendering Compliance Routine: {ex_cp}")
+            self.compliance_routine_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга чек-листа: {ex_cp}", color=ft.Colors.ERROR),
                 padding=12,
             )
 
