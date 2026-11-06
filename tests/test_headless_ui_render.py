@@ -87,6 +87,11 @@ def test_dashboard_view_headless_render():
     sizing_card = dash._build_position_sizing_simulator_card(trades=[])
     assert sizing_card is not None
 
+    # Verify market regime alignment card renders cleanly
+    regime_card = dash._build_market_regime_card(trades=[])
+    assert regime_card is not None
+    assert dash.market_regime_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

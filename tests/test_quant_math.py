@@ -738,6 +738,43 @@ def test_position_sizing_simulator():
     assert len(sim["optimal_insight"]) > 10
 
 
+def test_market_regime_matrix():
+    """Verify market regime alignment across Bull Trend, Bear Trend, Range Chop, and Breakout Expansion."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_market_regime_matrix([])
+    assert set(empty_mat["regimes"].keys()) == {"BULL_TREND", "BEAR_TREND", "RANGE_CHOP", "BREAKOUT_EXPANSION"}
+    assert empty_mat["best_regime"] is None
+
+    # 2. Categorized trades
+    t_bull = Trade(strategy_tag="Trend Long", notes="Восходящий тренд", direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0) # +300
+    t_bear = Trade(strategy_tag="Short Selloff", notes="Нисходящий тренд", direction="SHORT", entry_price=100.0, exit_price=80.0, volume=10.0) # +200
+    t_chop = Trade(strategy_tag="Range Mean Reversion", notes="Флэт у границы", direction="LONG", entry_price=100.0, exit_price=85.0, volume=10.0) # -150
+    t_bo = Trade(strategy_tag="Breakout Momentum", notes="Импульсный пробой ATH", direction="LONG", entry_price=100.0, exit_price=160.0, volume=10.0) # +600
+
+    trades = [t_bull, t_bear, t_chop, t_bo]
+    mat = AnalyticsService.calculate_market_regime_matrix(trades)
+    regimes = mat["regimes"]
+
+    assert regimes["BULL_TREND"]["trades_count"] == 1
+    assert regimes["BULL_TREND"]["net_pnl"] == 300.0
+    assert regimes["BULL_TREND"]["winrate"] == 100.0
+
+    assert regimes["BEAR_TREND"]["trades_count"] == 1
+    assert regimes["BEAR_TREND"]["net_pnl"] == 200.0
+
+    assert regimes["RANGE_CHOP"]["trades_count"] == 1
+    assert regimes["RANGE_CHOP"]["net_pnl"] == -150.0
+    assert regimes["RANGE_CHOP"]["winrate"] == 0.0
+
+    assert regimes["BREAKOUT_EXPANSION"]["trades_count"] == 1
+    assert regimes["BREAKOUT_EXPANSION"]["net_pnl"] == 600.0
+
+    assert mat["best_regime"] == "BREAKOUT_EXPANSION"
+    assert mat["worst_regime"] == "RANGE_CHOP"
+    assert len(mat["regime_insight"]) > 5
+
+
+
 
 
 

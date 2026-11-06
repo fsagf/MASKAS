@@ -1745,6 +1745,155 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_market_regime_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ эффективности стратегий в различных рыночных фазах (TradeZella / TraderSync Market Regime Matrix).
+        Классифицирует сделки по 4 макро-режимам рынка:
+        - BULL_TREND: Восходящий тренд / Сильный моментум покупателей.
+        - BEAR_TREND: Нисходящий тренд / Давление продавцов.
+        - RANGE_CHOP: Боковик / Флэт / Торговля в коридоре.
+        - BREAKOUT_EXPANSION: Импульсный пробой волатильности / Новости.
+        """
+        regimes_def = {
+            "BULL_TREND": {
+                "key": "BULL_TREND",
+                "name": "Восходящий тренд",
+                "sub": "Bullish Trend / Momentum",
+                "color": "#10B981",
+                "icon": "trending_up_rounded",
+            },
+            "BEAR_TREND": {
+                "key": "BEAR_TREND",
+                "name": "Нисходящий тренд",
+                "sub": "Bearish Trend / Selloff",
+                "color": "#EF4444",
+                "icon": "trending_down_rounded",
+            },
+            "RANGE_CHOP": {
+                "key": "RANGE_CHOP",
+                "name": "Флэт / Консолидация",
+                "sub": "Sideways / Range / Chop",
+                "color": "#6366F1",
+                "icon": "sync_alt_rounded",
+            },
+            "BREAKOUT_EXPANSION": {
+                "key": "BREAKOUT_EXPANSION",
+                "name": "Пробой волатильности",
+                "sub": "Volatility Expansion / News",
+                "color": "#F59E0B",
+                "icon": "bolt_rounded",
+            },
+        }
+
+        def detect_regime(t: Trade) -> str:
+            notes = (getattr(t, "notes", "") or "").lower()
+            strat = (getattr(t, "strategy_tag", "") or "").lower()
+            if any(w in notes or w in strat for w in ["пробой", "breakout", "ath", "импульс", "expansion", "news"]):
+                return "BREAKOUT_EXPANSION"
+            if any(w in notes or w in strat for w in ["флэт", "range", "боковик", "канал", "reversion", "уровень", "отскок"]):
+                return "RANGE_CHOP"
+            if any(w in notes or w in strat for w in ["нисходящ", "bear", "шорт", "selloff", "падение"]):
+                return "BEAR_TREND"
+            if any(w in notes or w in strat for w in ["тренд", "bull", "лонг", "рост", "up"]):
+                return "BULL_TREND"
+            dir_str = (getattr(t, "direction", "LONG") or "LONG").upper()
+            if dir_str == "SHORT":
+                return "BEAR_TREND"
+            return "BULL_TREND"
+
+        if not trades:
+            empty_regimes = {}
+            for k, meta in regimes_def.items():
+                empty_regimes[k] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                    "top_strategy": "—",
+                }
+            return {
+                "regimes": empty_regimes,
+                "best_regime": None,
+                "worst_regime": None,
+                "regime_insight": "Анализ рыночных фаз активен",
+                "total_trades": 0,
+            }
+
+        bucketed: Dict[str, List[Trade]] = {k: [] for k in regimes_def}
+        for t in trades:
+            r_key = detect_regime(t)
+            bucketed[r_key].append(t)
+
+        results = {}
+        for r_key, r_trades in bucketed.items():
+            meta = regimes_def[r_key]
+            cnt = len(r_trades)
+            if cnt == 0:
+                results[r_key] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                    "top_strategy": "—",
+                }
+                continue
+
+            pnls = [float(t.net_pnl or 0.0) for t in r_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / cnt * 100, 1)
+            net_pnl = round(float(sum(pnls)), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            avg_pnl = round(net_pnl / cnt, 2)
+
+            strat_pnl: Dict[str, float] = {}
+            for t in r_trades:
+                st = getattr(t, "strategy_tag", "Default") or "Default"
+                strat_pnl[st] = strat_pnl.get(st, 0.0) + float(t.net_pnl or 0.0)
+            top_strat = max(strat_pnl.keys(), key=lambda s: strat_pnl[s]) if strat_pnl else "—"
+
+            results[r_key] = {
+                **meta,
+                "trades_count": cnt,
+                "win_trades": len(wins),
+                "loss_trades": len(losses),
+                "winrate": winrate,
+                "net_pnl": net_pnl,
+                "profit_factor": pf,
+                "avg_trade_pnl": avg_pnl,
+                "top_strategy": top_strat,
+            }
+
+        active = [r for r in results.values() if r["trades_count"] > 0]
+        best_r = max(active, key=lambda x: x["net_pnl"])["key"] if active else None
+        worst_r = min(active, key=lambda x: x["net_pnl"])["key"] if active else None
+
+        if best_r:
+            b_meta = results[best_r]
+            insight = f"Лучший режим: {b_meta['name']} -> {b_meta['net_pnl']:+,.2f} $ (Сетап: '{b_meta['top_strategy']}')"
+        else:
+            insight = "Анализ рыночных фаз активен"
+
+        return {
+            "regimes": results,
+            "best_regime": best_r,
+            "worst_regime": worst_r,
+            "regime_insight": insight,
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

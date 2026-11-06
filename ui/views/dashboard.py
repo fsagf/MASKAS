@@ -124,6 +124,7 @@ class DashboardView(ft.Container):
         self.excursion_matrix_container = ft.Container()
         self.monthly_phase_container = ft.Container()
         self.sizing_simulator_container = ft.Container()
+        self.market_regime_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -283,6 +284,8 @@ class DashboardView(ft.Container):
                 self.monthly_phase_container,
                 ft.Container(height=4),
                 self.sizing_simulator_container,
+                ft.Container(height=4),
+                self.market_regime_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -2120,6 +2123,170 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_market_regime_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный анализ эффективности в фазах рынка (Market Regime Alignment Matrix).
+        """
+        matrix = AnalyticsService.calculate_market_regime_matrix(trades)
+        regimes = matrix["regimes"]
+        best_r = matrix["best_regime"]
+        insight = matrix["regime_insight"]
+
+        icon_map = {
+            "BULL_TREND": ft.Icons.TRENDING_UP_ROUNDED,
+            "BEAR_TREND": ft.Icons.TRENDING_DOWN_ROUNDED,
+            "RANGE_CHOP": ft.Icons.SYNC_ALT_ROUNDED,
+            "BREAKOUT_EXPANSION": ft.Icons.BOLT_ROUNDED,
+        }
+
+        cards = []
+        for r_key in ["BULL_TREND", "BEAR_TREND", "RANGE_CHOP", "BREAKOUT_EXPANSION"]:
+            r = regimes[r_key]
+            is_best = (r_key == best_r and r["trades_count"] > 0)
+
+            pnl_val = r["net_pnl"]
+            pnl_color = PROFIT if pnl_val >= 0 else LOSS
+            pnl_sign = "+" if pnl_val >= 0 else ""
+            icon_ctrl = icon_map.get(r_key, ft.Icons.AUTO_GRAPH_ROUNDED)
+
+            leader_chip = ft.Container(
+                content=ft.Text("TOP REGIME", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                bgcolor=ft.Colors.with_opacity(0.15, ACCENT_PRIMARY),
+                padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.4, ACCENT_PRIMARY)),
+            ) if is_best else ft.Container()
+
+            card_widget = ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Row(
+                                    controls=[
+                                        ft.Container(
+                                            content=ft.Icon(icon_ctrl, size=15, color=r["color"]),
+                                            padding=5,
+                                            bgcolor=ft.Colors.with_opacity(0.12, r["color"]),
+                                            border_radius=RADIUS_SM,
+                                        ),
+                                        ft.Column(
+                                            controls=[
+                                                ft.Text(r["name"], size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                                ft.Text(r["sub"], size=10, color=TEXT_MUTED, font_family=FONT_MONO),
+                                            ],
+                                            spacing=1,
+                                        ),
+                                    ],
+                                    spacing=8,
+                                ),
+                                leader_chip,
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=4),
+                        ft.ProgressBar(
+                            value=r["winrate"] / 100.0 if r["trades_count"] > 0 else 0.0,
+                            color=r["color"],
+                            bgcolor=SURFACE_2,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                        ft.Container(height=4),
+                        ft.Row(
+                            controls=[
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Net PnL", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{pnl_sign}${pnl_val:,.2f}", size=13, weight=ft.FontWeight.BOLD, color=pnl_color, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Winrate", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{r['winrate']}% ({r['trades_count']} сд.)", size=11, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                                ft.Column(
+                                    controls=[
+                                        ft.Text("Profit Factor", size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                        ft.Text(f"{r['profit_factor']:.2f}", size=11, weight=ft.FontWeight.W_600, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                                    ],
+                                    spacing=1,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Container(height=4),
+                        ft.Container(
+                            content=ft.Text(f"Сетап: {r['top_strategy']}", size=9, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                            bgcolor=SURFACE_1,
+                            padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                            border_radius=RADIUS_SM,
+                            border=ft.border.all(1, BORDER_SUBTLE),
+                        ),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.35, r["color"]) if is_best else BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            )
+            cards.append(card_widget)
+
+        header_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.INSIGHTS_ROUNDED, size=13, color="#EC4899"),
+                    ft.Text(
+                        insight,
+                        size=10,
+                        weight=ft.FontWeight.BOLD,
+                        color="#EC4899",
+                        font_family=FONT_MONO,
+                    ),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, "#EC4899"),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, "#EC4899")),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.AUTO_GRAPH_ROUNDED, color="#EC4899", size=18),
+                                    ft.Text("Рыночные фазы и соответствие режимам", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Market Regime Alignment)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=cards, spacing=10, run_spacing=10),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -2672,6 +2839,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Sizing Simulator: {ex_sim}")
             self.sizing_simulator_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга симулятора сайзинга: {ex_sim}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.9 Обновление матрицы рыночных фаз и режимов (Error Boundary)
+        try:
+            self.market_regime_container.content = self._build_market_regime_card(trades)
+        except Exception as ex_reg:
+            logging.exception(f"[DashboardView] Error rendering Market Regime Matrix: {ex_reg}")
+            self.market_regime_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга фаз рынка: {ex_reg}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

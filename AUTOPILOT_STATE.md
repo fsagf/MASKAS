@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 13 (Completed) -> Starting Iteration 14
-- **Current Phase:** Phase 4: Full Regression & Close Loop
-- **Status:** All 44 Tests Green (100% Passing). Position Sizing & Fractional Risk Curve Simulator Deployed.
+- **Iteration:** 14 (Completed) -> Starting Iteration 15
+- **Current Phase:** Phase 1: Competitor R&D & Implementation
+- **Status:** All 45 Tests Green (100% Passing). Market Regime Alignment Matrix Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -99,16 +99,22 @@
   - Discovers the optimal Calmar-based risk rule and generates actionable sizing guidance.
   - Created `_build_position_sizing_simulator_card` in `ui/views/dashboard.py` with 4 model cards, return/drawdown metrics, and optimal rule recommendation chip.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (44 tests):**
+- [x] **Market Regime Alignment & Macro Phase Matrix (Iteration 14):**
+  - Implemented `AnalyticsService.calculate_market_regime_matrix(trades)`: classifies trades into 4 macro market regimes (`Bull Trend`, `Bear Trend`, `Range / Chop`, `Breakout Expansion`).
+  - Calculates Winrate %, Net PnL, Profit Factor, Trade Count, and Top Setup tag for each regime.
+  - Discovers the highest edge market environment (`best_regime`) and generates contextual strategy recommendations.
+  - Created `_build_market_regime_card` in `ui/views/dashboard.py` with 4 responsive regime cards, winrate progress bars, TOP REGIME badge, and insight header chip.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (45 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 17 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 18 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Sizing Simulator card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Market Regime Matrix card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 14+)
-- [ ] **TradeZella / TraderSync:** Market Regime Alignment Matrix (Trend vs Range vs Volatile chop setup winrates).
+## Competitor Backlog (R&D for Iteration 15+)
 - [ ] **TradingView / Edgewonk:** Interactive R-Multiple Frequency Distribution Bar & Skewness Engine.
+- [ ] **TradeZella:** Planned vs Realized R:R Execution Leakage Matrix (Execution slippage & premature exit gap).
