@@ -450,6 +450,67 @@ def test_strategy_leaderboard_matrix():
     assert board[2]["winrate"] == 50.0
 
 
+def test_trade_duration_matrix():
+    """Verify holding time categorization across Scalp, Short/Mid Intraday, Day Trade, and Swing."""
+    # 1. Empty trades
+    empty_dur = AnalyticsService.calculate_duration_matrix([])
+    assert "brackets" in empty_dur
+    assert set(empty_dur["brackets"].keys()) == {"SCALP", "SHORT_INTRA", "MID_INTRA", "DAY_TRADE", "SWING"}
+    assert empty_dur["best_duration"] is None
+
+    # 2. Trades with specific durations
+    now = datetime.datetime(2026, 3, 1, 10, 0, 0)
+
+    # 5 mins -> SCALP (+250)
+    t_scalp = Trade(
+        direction="LONG", entry_price=100.0, exit_price=125.0, volume=10.0,
+        opened_at=now, closed_at=now + datetime.timedelta(minutes=5),
+    )
+    # 30 mins -> SHORT_INTRA (+180)
+    t_short = Trade(
+        direction="LONG", entry_price=100.0, exit_price=118.0, volume=10.0,
+        opened_at=now, closed_at=now + datetime.timedelta(minutes=30),
+    )
+    # 2.5 hours -> MID_INTRA (+600)
+    t_mid = Trade(
+        direction="LONG", entry_price=100.0, exit_price=160.0, volume=10.0,
+        opened_at=now, closed_at=now + datetime.timedelta(hours=2, minutes=30),
+    )
+    # 8 hours -> DAY_TRADE (-350)
+    t_day = Trade(
+        direction="LONG", entry_price=100.0, exit_price=65.0, volume=10.0,
+        opened_at=now, closed_at=now + datetime.timedelta(hours=8),
+    )
+    # 36 hours -> SWING (+1200)
+    t_swing = Trade(
+        direction="LONG", entry_price=100.0, exit_price=220.0, volume=10.0,
+        opened_at=now, closed_at=now + datetime.timedelta(hours=36),
+    )
+
+    trades = [t_scalp, t_short, t_mid, t_day, t_swing]
+    matrix = AnalyticsService.calculate_duration_matrix(trades)
+    b = matrix["brackets"]
+
+    assert b["SCALP"]["trades_count"] == 1
+    assert b["SCALP"]["net_pnl"] == 250.0
+
+    assert b["SHORT_INTRA"]["trades_count"] == 1
+    assert b["SHORT_INTRA"]["net_pnl"] == 180.0
+
+    assert b["MID_INTRA"]["trades_count"] == 1
+    assert b["MID_INTRA"]["net_pnl"] == 600.0
+
+    assert b["DAY_TRADE"]["trades_count"] == 1
+    assert b["DAY_TRADE"]["net_pnl"] == -350.0
+
+    assert b["SWING"]["trades_count"] == 1
+    assert b["SWING"]["net_pnl"] == 1200.0
+
+    assert matrix["best_duration"] == "SWING"
+    assert matrix["worst_duration"] == "DAY_TRADE"
+
+
+
 
 
 

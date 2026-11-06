@@ -2,11 +2,11 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 5 (Completed) -> Starting Iteration 6
+- **Iteration:** 6 (Completed) -> Starting Iteration 7
 - **Current Phase:** Phase 4: Full Regression & Close Loop
-- **Status:** All 37 Tests Green (100% Passing). Strategy & Setup Leaderboard Deployed.
+- **Status:** All 38 Tests Green (100% Passing). Trade Duration & Holding Time Performance Matrix Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
-- **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://172.20.10.4:8550` (Daemon task running)
+- **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
 ---
 
@@ -14,9 +14,10 @@
 1. **Localtunnel Hang (`twenty-forks-enter.loca.lt`):**
    - User screenshot showed Chrome tab `twenty-forks-enter.loca.lt` hanging indefinitely on the Flet fish splash screen.
    - **Root Cause:** Localtunnel (`loca.lt`) drops or delays persistent WebSocket packets (`ws://`) required by Flutter/Flet, and rate-limits heavy WASM bundles (`canvaskit.wasm`) over slow internet connections.
-   - **Resolution:** The next browser tab on the user's screen — `Trading Journal Pro` — is already open and running. Direct Wi-Fi LAN address `http://172.20.10.4:8550` loads instantaneously with zero tunnel latency.
-2. **Offline / Low-Bandwidth Optimizations:**
-   - WebRenderer is configured to `ft.WebRenderer.AUTO` for minimal bandwidth usage on mobile devices.
+   - **Resolution:** The user should switch to the local address `http://localhost:8550` (or click the tab `Trading Journal Pro` already opened in Chrome).
+2. **Wi-Fi Network Change:**
+   - Active Wi-Fi IPv4 changed to `192.168.100.6` (ProtonVPN active on `10.2.0.2`).
+   - Old IP `172.20.10.4` is no longer reachable. Mobile devices should now use `http://192.168.100.6:8550` (with ProtonVPN "Allow LAN" enabled).
 
 ---
 
@@ -50,21 +51,27 @@
   - Implemented `AnalyticsService.calculate_strategy_leaderboard(trades)`: aggregates and ranks trading strategies/playbook setups by Net PnL, Profit Factor, Winrate, and SQN.
   - Created `_build_strategy_leaderboard_card` in `ui/views/dashboard.py` with medal badges (#1 Gold, #2 Silver, #3 Bronze), winrate progress bars, and profit factor indicators.
   - Integrated into `DashboardView` between Session Matrix and Time Heatmap.
+- [x] **Trade Duration & Holding Time Performance Matrix (Iteration 6):**
+  - Implemented `AnalyticsService.calculate_duration_matrix(trades)`: segments trades into 5 holding duration buckets (`<15m` Scalp, `15m-1h` Short Intraday, `1h-4h` Mid Intraday, `4h-24h` Day Trade, `>24h` Swing).
+  - Computes Winrate %, Net PnL, Profit Factor, Avg Duration, and Total Trades for each bracket.
+  - Identifies optimal holding period bracket (`optimal_bracket`).
+  - Created `_build_duration_analysis_card` in `ui/views/dashboard.py` with duration bracket cards, KPI progress bars, and optimal duration badge.
+  - Integrated into `DashboardView` beneath the Strategy Leaderboard.
 - [x] **Monte Carlo Simulator:** 10,000 bootstrap simulations accounting for initial account balance and equity cone percentiles (5th, 50th, 95th).
 - [x] **Tilt & Psychology Engine:** Detects revenge trading (<10 min cooldown after loss), over-risking (>2x avg risk), and break-even violation patterns.
 - [x] **Wave AI Coach:** Rule-based quant trading coach diagnosing fee drag, MAE/MFE retention loss, risk discipline, and Kelly sizing.
 - [x] **High-Performance Local Server Runner:** `run_local_server.py` with multi-adapter IP detection, VPN warning, terminal ASCII QR-code, and 1-click `ЗАПУСК_СЕРВЕРА.bat`.
-- [x] **Total QA Suite (37 tests):**
+- [x] **Total QA Suite (38 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 10 tests (including SQN, Sharpe/Sortino, Session Matrix, Time Heatmap, Kelly & Streaks, Strategy Leaderboard).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 11 tests (including SQN, Sharpe/Sortino, Session Matrix, Time Heatmap, Kelly & Streaks, Strategy Leaderboard, Duration Matrix).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Strategy Leaderboard card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Duration Analysis card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 6+)
-- [ ] **TraderSync / Linear:** Linear-style keyboard shortcut command palette (Ctrl+K) for instant trade lookup, filter by strategy, and modal triggers (Iteration 6 Target).
-- [ ] **TradeZella:** Trade Duration vs PnL distribution scatter analysis.
+## Competitor Backlog (R&D for Iteration 7+)
+- [ ] **TraderSync / Linear:** Linear-style keyboard shortcut command palette (Ctrl+K) for instant trade lookup, filter by strategy, and modal triggers (Iteration 7 Target).
 - [ ] **Edgewonk:** Emotional State & Psychology Matrix (tracking Discipline, Fear, Greed, FOMO impact on PnL).
+- [ ] **TraderVue:** Asset Class & Symbol Concentration Risk Matrix.

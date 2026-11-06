@@ -912,6 +912,138 @@ class AnalyticsService:
         return leaderboard
 
     @classmethod
+    def calculate_duration_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Квантовый анализ времени удержания позиций (Holding Duration vs PnL).
+        Диагностирует проблему пересиживания убытков и преждевременного закрытия профита.
+        """
+        brackets_def = {
+            "SCALP": {
+                "key": "SCALP",
+                "name": "Скальпинг",
+                "range_label": "< 15 минут",
+                "color": "#22D3EE",
+            },
+            "SHORT_INTRA": {
+                "key": "SHORT_INTRA",
+                "name": "Короткий интрадей",
+                "range_label": "15м – 1 час",
+                "color": "#6366F1",
+            },
+            "MID_INTRA": {
+                "key": "MID_INTRA",
+                "name": "Интрадей трейд",
+                "range_label": "1 – 4 часа",
+                "color": "#7C5CFF",
+            },
+            "DAY_TRADE": {
+                "key": "DAY_TRADE",
+                "name": "Дневной трейд",
+                "range_label": "4 – 24 часа",
+                "color": "#F472B6",
+            },
+            "SWING": {
+                "key": "SWING",
+                "name": "Свинг позиция",
+                "range_label": "> 24 часов",
+                "color": "#FBBF24",
+            },
+        }
+
+        bucketed: Dict[str, List[Trade]] = {k: [] for k in brackets_def}
+        durations_sec_map: Dict[str, List[float]] = {k: [] for k in brackets_def}
+
+        for t in trades:
+            t_open = t.opened_at
+            t_close = t.closed_at
+            if isinstance(t_open, str):
+                try:
+                    t_open = datetime.fromisoformat(t_open.replace("Z", "+00:00"))
+                except Exception:
+                    t_open = None
+            if isinstance(t_close, str):
+                try:
+                    t_close = datetime.fromisoformat(t_close.replace("Z", "+00:00"))
+                except Exception:
+                    t_close = None
+
+            if t_open and t_close and t_close >= t_open:
+                sec = (t_close - t_open).total_seconds()
+            else:
+                sec = 3600.0  # Дефолт 1 час
+
+            if sec < 900:
+                b_key = "SCALP"
+            elif sec < 3600:
+                b_key = "SHORT_INTRA"
+            elif sec < 14400:
+                b_key = "MID_INTRA"
+            elif sec < 86400:
+                b_key = "DAY_TRADE"
+            else:
+                b_key = "SWING"
+
+            bucketed[b_key].append(t)
+            durations_sec_map[b_key].append(sec)
+
+        results = {}
+        for b_key, b_trades in bucketed.items():
+            meta = brackets_def[b_key]
+            count = len(b_trades)
+            if count == 0:
+                results[b_key] = {
+                    **meta,
+                    "trades_count": 0,
+                    "win_trades": 0,
+                    "loss_trades": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_trade_pnl": 0.0,
+                    "avg_duration_min": 0.0,
+                    "avg_efficiency": 0.0,
+                }
+                continue
+
+            pnls = [float(t.net_pnl or 0.0) for t in b_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / count * 100, 1)
+            net_pnl = round(float(sum(pnls)), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            avg_pnl = round(net_pnl / count, 2)
+            avg_dur_min = round(float(np.mean(durations_sec_map[b_key])) / 60.0, 1)
+            eff_vals = [float(t.efficiency) for t in b_trades if getattr(t, "efficiency", None) is not None]
+            avg_eff = round(float(np.mean(eff_vals)) * 100, 1) if eff_vals else 50.0
+
+            results[b_key] = {
+                **meta,
+                "trades_count": count,
+                "win_trades": len(wins),
+                "loss_trades": len(losses),
+                "winrate": winrate,
+                "net_pnl": net_pnl,
+                "profit_factor": pf,
+                "avg_trade_pnl": avg_pnl,
+                "avg_duration_min": avg_dur_min,
+                "avg_efficiency": avg_eff,
+            }
+
+        active_brackets = [b for b in results.values() if b["trades_count"] > 0]
+        best_duration = max(active_brackets, key=lambda x: x["net_pnl"])["key"] if active_brackets else None
+        worst_duration = min(active_brackets, key=lambda x: x["net_pnl"])["key"] if active_brackets else None
+
+        return {
+            "brackets": results,
+            "best_duration": best_duration,
+            "worst_duration": worst_duration,
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

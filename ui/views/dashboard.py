@@ -117,6 +117,7 @@ class DashboardView(ft.Container):
         self.monte_carlo_container = ft.Container()
         self.session_matrix_container = ft.Container()
         self.strategy_leaderboard_container = ft.Container()
+        self.duration_analysis_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -262,6 +263,8 @@ class DashboardView(ft.Container):
                 self.session_matrix_container,
                 ft.Container(height=4),
                 self.strategy_leaderboard_container,
+                ft.Container(height=4),
+                self.duration_analysis_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -929,6 +932,133 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_duration_analysis_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный анализ времени удержания сделок (Holding Duration vs Performance).
+        """
+        matrix = AnalyticsService.calculate_duration_matrix(trades)
+        brackets = matrix["brackets"]
+        best_b = matrix["best_duration"]
+
+        cards = []
+        for b_key in ["SCALP", "SHORT_INTRA", "MID_INTRA", "DAY_TRADE", "SWING"]:
+            b = brackets[b_key]
+            is_best = (b_key == best_b and b["trades_count"] > 0 and b["net_pnl"] > 0)
+            pnl_col = PROFIT if b["net_pnl"] > 0 else (LOSS if b["net_pnl"] < 0 else TEXT_MUTED)
+            wr_col = PROFIT if b["winrate"] >= 50 else (LOSS if b["trades_count"] > 0 else TEXT_MUTED)
+
+            status_tag = (
+                ft.Container(
+                    content=ft.Text("ТОП ДИАПАЗОН", size=8, weight=ft.FontWeight.BOLD, color=PROFIT, font_family=FONT_MONO),
+                    bgcolor=ft.Colors.with_opacity(0.15, PROFIT),
+                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                    border_radius=RADIUS_SM,
+                )
+                if is_best
+                else ft.Container(
+                    content=ft.Text(f"~{b['avg_duration_min']:.0f}м" if b["trades_count"] > 0 else "—", size=9, color=TEXT_MUTED, font_family=FONT_MONO),
+                )
+            )
+
+            c_content = ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Text(b["name"], size=11, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                            status_tag,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Text(b["range_label"], size=9, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                    ft.Divider(color=BORDER_SUBTLE, height=6),
+                    ft.Row(
+                        controls=[
+                            ft.Text(
+                                f"{b['net_pnl']:+,.2f} $" if b["trades_count"] > 0 else "0.00 $",
+                                size=14,
+                                weight=ft.FontWeight.BOLD,
+                                color=pnl_col,
+                                font_family=FONT_MONO,
+                            ),
+                            ft.Text(
+                                f"{b['winrate']:.0f}% WR" if b["trades_count"] > 0 else "—",
+                                size=11,
+                                weight=ft.FontWeight.W_600,
+                                color=wr_col,
+                                font_family=FONT_MONO,
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.ProgressBar(
+                        value=(b["winrate"] / 100.0) if b["trades_count"] > 0 else 0.0,
+                        color=wr_col,
+                        bgcolor=SURFACE_3,
+                        height=3,
+                        border_radius=ft.border_radius.all(2),
+                    ),
+                    ft.Row(
+                        controls=[
+                            ft.Text(f"{b['trades_count']} сд.", size=9, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                            ft.Text(f"PF: {b['profit_factor']:.2f}" if b["trades_count"] > 0 else "PF: —", size=9, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                            ft.Text(f"КПД: {b['avg_efficiency']:.0f}%" if b["trades_count"] > 0 else "КПД: —", size=9, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                ],
+                spacing=4,
+            )
+
+            card_widget = ft.Container(
+                content=c_content,
+                bgcolor=SURFACE_2,
+                padding=10,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1.2 if is_best else 1, PROFIT if is_best else BORDER_SUBTLE),
+                col={"sm": 12, "md": 4, "lg": 2.4},
+            )
+            cards.append(card_widget)
+
+        if best_b and brackets[best_b]["trades_count"] > 0:
+            best_meta = brackets[best_b]
+            insight_label = f"Оптимальный горизонт: {best_meta['name']} ({best_meta['range_label']}) -> {best_meta['net_pnl']:+,.2f} $"
+        else:
+            insight_label = "Анализ времени удержания (Holding Duration) активен"
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.HOURGLASS_BOTTOM_ROUNDED, color=ACCENT_PRIMARY, size=18),
+                                    ft.Text("Анализ времени удержания сделок", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Duration vs PnL & КПД)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            ft.Container(
+                                content=ft.Text(insight_label, size=10, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+                                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                                border_radius=RADIUS_SM,
+                                border=ft.border.all(1, ft.Colors.with_opacity(0.25, ACCENT_PRIMARY)),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=cards, spacing=10, run_spacing=10),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -1407,6 +1537,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Strategy Leaderboard: {ex_lead}")
             self.strategy_leaderboard_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга лидерборда стратегий: {ex_lead}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.2 Обновление анализа времени удержания (Error Boundary)
+        try:
+            self.duration_analysis_container.content = self._build_duration_analysis_card(trades)
+        except Exception as ex_dur:
+            logging.exception(f"[DashboardView] Error rendering Duration Analysis: {ex_dur}")
+            self.duration_analysis_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга анализа длительности: {ex_dur}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

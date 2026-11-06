@@ -39,6 +39,7 @@ def test_dashboard_view_headless_render():
     assert hasattr(dash, "monte_carlo_container")
     assert hasattr(dash, "session_matrix_container")
     assert hasattr(dash, "strategy_leaderboard_container")
+    assert hasattr(dash, "duration_analysis_container")
     assert hasattr(dash, "time_heatmap")
     assert hasattr(dash, "pnl_calendar")
     assert hasattr(dash, "tilt_switch")
@@ -51,6 +52,10 @@ def test_dashboard_view_headless_render():
     # Verify strategy leaderboard card renders cleanly
     strat_card = dash._build_strategy_leaderboard_card(trades=[])
     assert strat_card is not None
+
+    # Verify duration analysis card renders cleanly
+    dur_card = dash._build_duration_analysis_card(trades=[])
+    assert dur_card is not None
 
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
