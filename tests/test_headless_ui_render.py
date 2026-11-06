@@ -97,6 +97,11 @@ def test_dashboard_view_headless_render():
     assert r_dist_card is not None
     assert dash.r_distribution_container is not None
 
+    # Verify R:R efficiency and leakage card renders cleanly
+    rr_card = dash._build_rr_efficiency_card(trades=[])
+    assert rr_card is not None
+    assert dash.rr_efficiency_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

@@ -820,6 +820,35 @@ def test_r_distribution_matrix():
     assert len(mat["distribution_profile"]) > 10
 
 
+def test_rr_efficiency_matrix():
+    """Verify planned vs realized R:R execution efficiency and leakage calculations."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_rr_efficiency_matrix([])
+    assert empty_mat["execution_efficiency_pct"] == 0.0
+    assert empty_mat["total_leakage_dollars"] == 0.0
+    assert empty_mat["execution_grade"] == "N/A"
+
+    # 2. Disciplined vs Premature exits
+    # Trade 1: Entry=100, SL=90, TP=130 (Planned R:R = 3.0), Exit=130 (Hit full target)
+    t_full = Trade(direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0, stop_loss=90.0, take_profit=130.0) # Net PnL = +300, Eff = 100%
+    # Trade 2: Entry=100, SL=90, TP=130 (Planned R:R = 3.0), Exit=115 (Early fear exit)
+    t_early = Trade(direction="LONG", entry_price=100.0, exit_price=115.0, volume=10.0, stop_loss=90.0, take_profit=130.0) # Net PnL = +150, Target=300, Leakage=150, Eff=50%
+    # Trade 3: Entry=100, SL=90, TP=130, Exit=90 (Stop hit)
+    t_loss = Trade(direction="LONG", entry_price=100.0, exit_price=90.0, volume=10.0, stop_loss=90.0, take_profit=130.0) # Net PnL = -100
+
+    trades = [t_full, t_early, t_loss]
+    mat = AnalyticsService.calculate_rr_efficiency_matrix(trades)
+
+    assert mat["avg_planned_rr"] == 3.0
+    assert mat["total_leakage_dollars"] == 150.0
+    assert mat["disciplined_exits_count"] == 1
+    assert mat["premature_exits_count"] == 1
+    assert mat["execution_efficiency_pct"] == 75.0
+    assert "B" in mat["execution_grade"]
+    assert len(mat["leakage_insight"]) > 5
+
+
+
 
 
 

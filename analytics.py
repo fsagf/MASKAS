@@ -2059,6 +2059,125 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_rr_efficiency_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Анализ эффективности реализации запланированного Risk-to-Reward (R:R Execution Efficiency & Leakage).
+        Сопоставляет запланированное соотношение R:R с фактически зафиксированным R:R:
+        - Planned R:R = |TakeProfit - EntryPrice| / |StopLoss - EntryPrice|
+        - Realized R:R = NetPnL / InitialRisk
+        - Execution Efficiency % = (Realized R:R / Planned R:R) * 100%
+        - Dollar Leakage = Недополученная прибыль из-за преждевременного закрытия тейка
+        """
+        if not trades:
+            return {
+                "avg_planned_rr": 0.0,
+                "avg_realized_rr": 0.0,
+                "execution_efficiency_pct": 0.0,
+                "total_leakage_dollars": 0.0,
+                "disciplined_exits_count": 0,
+                "premature_exits_count": 0,
+                "execution_grade": "N/A",
+                "grade_color": "#94A3B8",
+                "leakage_insight": "Нет закрытых сделок для анализа R:R исполнения",
+                "evaluated_trades_count": 0,
+                "total_trades": 0,
+            }
+
+        planned_rrs: List[float] = []
+        realized_rrs: List[float] = []
+        efficiencies: List[float] = []
+        leakages: List[float] = []
+
+        disciplined_cnt = 0
+        premature_cnt = 0
+
+        for t in trades:
+            ep = float(t.entry_price or 100.0)
+            sl = float(t.stop_loss or 0.0)
+            tp = float(t.take_profit or 0.0)
+            vol = max(float(t.volume or 1.0), 1e-4)
+            pnl = float(t.net_pnl or 0.0)
+
+            # 1. Расчет запланированного риска
+            if sl > 0 and abs(ep - sl) > 0:
+                stop_dist = abs(ep - sl)
+                risk_amt = stop_dist * vol
+            elif getattr(t, "initial_risk", None) and float(t.initial_risk) > 0:
+                risk_amt = float(t.initial_risk)
+                stop_dist = risk_amt / vol
+            else:
+                stop_dist = max(ep * 0.01, 1.0)
+                risk_amt = stop_dist * vol
+
+            # 2. Расчет запланированного тейк-профита и Planned R:R
+            if tp > 0 and abs(tp - ep) > 0:
+                tp_dist = abs(tp - ep)
+                planned_rr = round(tp_dist / stop_dist, 2)
+            else:
+                # Если тейк не был жестко задан, берем стандартный таргетинг 1:2
+                planned_rr = 2.0
+                tp_dist = stop_dist * 2.0
+
+            # 3. Расчет фактического Realized R
+            realized_r = round(pnl / risk_amt, 2) if risk_amt > 0 else 0.0
+            realized_r = max(-10.0, min(20.0, realized_r))
+
+            planned_rrs.append(planned_rr)
+            realized_rrs.append(realized_r)
+
+            # 4. Анализ реализации тейка для прибыльных сделок
+            if pnl > 0:
+                target_pnl = tp_dist * vol
+                eff = round((realized_r / planned_rr) * 100.0, 1) if planned_rr > 0 else 100.0
+                eff = max(0.0, min(300.0, eff))
+                efficiencies.append(eff)
+
+                leak = max(0.0, round(target_pnl - pnl, 2))
+                leakages.append(leak)
+
+                if eff >= 90.0:
+                    disciplined_cnt += 1
+                elif eff < 75.0:
+                    premature_cnt += 1
+
+        avg_pl = round(float(np.mean(planned_rrs)), 2) if planned_rrs else 0.0
+        avg_rel = round(float(np.mean(realized_rrs)), 2) if realized_rrs else 0.0
+        avg_eff = round(float(np.mean(efficiencies)), 1) if efficiencies else 0.0
+        tot_leak = round(float(sum(leakages)), 2)
+
+        if avg_eff >= 90.0:
+            grade = "A+ (Эталонное соблюдение плана)"
+            grade_color = "#10B981"
+        elif avg_eff >= 75.0:
+            grade = "B (Умеренные ранние выходы)"
+            grade_color = "#38BDF8"
+        elif avg_eff >= 50.0:
+            grade = "C (Страх отдачи прибыли / Недосиживание)"
+            grade_color = "#F59E0B"
+        else:
+            grade = "D (Критическое недосиживание тейков)"
+            grade_color = "#EF4444"
+
+        if tot_leak > 0:
+            insight = f"Упущено из-за раннего закрытия: ${tot_leak:,.2f} • Реализуется {avg_eff}% плана"
+        else:
+            insight = f"Высокая дисциплина выходов • Реализуется {avg_eff}% плана"
+
+        return {
+            "avg_planned_rr": avg_pl,
+            "avg_realized_rr": avg_rel,
+            "execution_efficiency_pct": avg_eff,
+            "total_leakage_dollars": tot_leak,
+            "disciplined_exits_count": disciplined_cnt,
+            "premature_exits_count": premature_cnt,
+            "execution_grade": grade,
+            "grade_color": grade_color,
+            "leakage_insight": insight,
+            "evaluated_trades_count": len(planned_rrs),
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

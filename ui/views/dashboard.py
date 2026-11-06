@@ -126,6 +126,7 @@ class DashboardView(ft.Container):
         self.sizing_simulator_container = ft.Container()
         self.market_regime_container = ft.Container()
         self.r_distribution_container = ft.Container()
+        self.rr_efficiency_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -289,6 +290,8 @@ class DashboardView(ft.Container):
                 self.market_regime_container,
                 ft.Container(height=4),
                 self.r_distribution_container,
+                ft.Container(height=4),
+                self.rr_efficiency_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -2458,6 +2461,147 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_rr_efficiency_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный анализ соблюдения запланированного R:R и утечки прибыли (R:R Execution Efficiency & Leakage).
+        """
+        matrix = AnalyticsService.calculate_rr_efficiency_matrix(trades)
+        grade = matrix["execution_grade"]
+        color = matrix["grade_color"]
+        insight = matrix["leakage_insight"]
+
+        # 4 карточки KPI
+        cards = [
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Ср. план R:R", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Text(f"1 : {matrix['avg_planned_rr']:.2f}", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                        ft.Text("Целевое соотношение", size=9, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                    ],
+                    spacing=2,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Ср. факт R:R", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Text(f"{matrix['avg_realized_rr']:+.2f} R", size=14, weight=ft.FontWeight.BOLD, color=PROFIT if matrix['avg_realized_rr'] >= 0 else LOSS, font_family=FONT_MONO),
+                        ft.Text("Фактически взято", size=9, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                    ],
+                    spacing=2,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Text("R:R Эффективность", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Text(f"{matrix['execution_efficiency_pct']:.1f}%", size=10, weight=ft.FontWeight.BOLD, color=color, font_family=FONT_MONO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.ProgressBar(
+                            value=min(1.0, matrix['execution_efficiency_pct'] / 100.0) if matrix['evaluated_trades_count'] > 0 else 0.0,
+                            color=color,
+                            bgcolor=SURFACE_1,
+                            height=6,
+                            border_radius=RADIUS_SM,
+                        ),
+                        ft.Text(f"{matrix['disciplined_exits_count']} по плану • {matrix['premature_exits_count']} рано", size=9, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Упущенный тейк", size=10, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Text(f"-${matrix['total_leakage_dollars']:,.2f}", size=14, weight=ft.FontWeight.BOLD, color=WARNING_TILT if matrix['total_leakage_dollars'] > 0 else PROFIT, font_family=FONT_MONO),
+                        ft.Text("Недосиживание прибыли", size=9, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                    ],
+                    spacing=2,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 6, "sm": 3},
+            ),
+        ]
+
+        header_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.TRACK_CHANGES_ROUNDED, size=13, color=color),
+                    ft.Text(grade, size=10, weight=ft.FontWeight.BOLD, color=color, font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, color),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, color)),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.TRACK_CHANGES_ROUNDED, color="#06B6D4", size=18),
+                                    ft.Text("Эффективность исполнения плана R:R", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Planned vs Realized R:R)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=cards, spacing=10, run_spacing=10),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.LIGHTBULB_OUTLINE_ROUNDED, size=13, color=TEXT_MUTED),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -3030,6 +3174,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering R-Multiple Distribution: {ex_r}")
             self.r_distribution_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга R-распределения: {ex_r}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.11 Обновление эффективности исполнения R:R (Error Boundary)
+        try:
+            self.rr_efficiency_container.content = self._build_rr_efficiency_card(trades)
+        except Exception as ex_rr:
+            logging.exception(f"[DashboardView] Error rendering RR Efficiency Matrix: {ex_rr}")
+            self.rr_efficiency_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга эффективности R:R: {ex_rr}", color=ft.Colors.ERROR),
                 padding=12,
             )
 
