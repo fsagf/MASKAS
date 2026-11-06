@@ -558,6 +558,46 @@ def test_asset_allocation_matrix():
     assert "SOLUSDT" in conc_matrix["concentration_warning"]
 
 
+def test_psychology_matrix():
+    """Verify Edgewonk-style discipline scoring, tilt cost drag, and emotional leak identification."""
+    # 1. Empty trades
+    empty_psy = AnalyticsService.calculate_psychology_matrix([])
+    assert empty_psy["discipline_score_pct"] == 100.0
+    assert empty_psy["tilt_drag_amount"] == 0.0
+    assert empty_psy["primary_emotional_leak"] is None
+    assert len(empty_psy["reasons_breakdown"]) == 0
+
+    # 2. Fully disciplined portfolio
+    t_clean1 = Trade(ticker="BTCUSDT", direction="LONG", entry_price=100.0, exit_price=150.0, volume=10.0, is_tilt=False)
+    t_clean2 = Trade(ticker="ETHUSDT", direction="LONG", entry_price=100.0, exit_price=90.0, volume=10.0, is_tilt=False)
+    clean_mat = AnalyticsService.calculate_psychology_matrix([t_clean1, t_clean2])
+    assert clean_mat["discipline_score_pct"] == 100.0
+    assert clean_mat["tilt_drag_amount"] == 0.0
+    assert clean_mat["tilt_trades"] == 0
+
+    # 3. Mixed portfolio with Revenge and FOMO errors
+    t_bo = Trade(ticker="BTCUSDT", direction="LONG", entry_price=100.0, exit_price=150.0, volume=10.0, is_tilt=False)     # +500
+    t_eth = Trade(ticker="ETHUSDT", direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0, is_tilt=False)    # +300
+    t_stop = Trade(ticker="SOLUSDT", direction="LONG", entry_price=100.0, exit_price=90.0, volume=10.0, is_tilt=False)    # -100
+    t_revenge = Trade(ticker="SOLUSDT", direction="LONG", entry_price=100.0, exit_price=60.0, volume=10.0, is_tilt=True, tilt_reason="Revenge trade after stop")  # -400
+    t_fomo = Trade(ticker="DOGEUSDT", direction="LONG", entry_price=100.0, exit_price=85.0, volume=10.0, is_tilt=True, tilt_reason="FOMO entry on peak")        # -150
+
+    trades = [t_bo, t_eth, t_stop, t_revenge, t_fomo]
+    psy_mat = AnalyticsService.calculate_psychology_matrix(trades)
+
+    assert psy_mat["total_trades"] == 5
+    assert psy_mat["disciplined_trades"] == 3
+    assert psy_mat["tilt_trades"] == 2
+    assert psy_mat["discipline_score_pct"] == 60.0
+    assert psy_mat["disciplined_net_pnl"] == 700.0
+    assert psy_mat["tilt_net_pnl"] == -550.0
+    assert psy_mat["actual_net_pnl"] == 150.0
+    assert psy_mat["tilt_drag_amount"] == 550.0
+    assert "Revenge" in psy_mat["primary_emotional_leak"]
+    assert len(psy_mat["reasons_breakdown"]) == 2
+
+
+
 
 
 

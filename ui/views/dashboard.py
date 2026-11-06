@@ -119,6 +119,7 @@ class DashboardView(ft.Container):
         self.strategy_leaderboard_container = ft.Container()
         self.duration_analysis_container = ft.Container()
         self.asset_allocation_container = ft.Container()
+        self.psychology_matrix_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -268,6 +269,8 @@ class DashboardView(ft.Container):
                 self.duration_analysis_container,
                 ft.Container(height=4),
                 self.asset_allocation_container,
+                ft.Container(height=4),
+                self.psychology_matrix_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -1263,6 +1266,199 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_psychology_matrix_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный квантовый аудит психологии и стоимости тильта (Edgewonk Emotional Tilt Matrix).
+        """
+        matrix = AnalyticsService.calculate_psychology_matrix(trades)
+        disc_score = matrix["discipline_score_pct"]
+        tilt_drag = matrix["tilt_drag_amount"]
+        leak = matrix["primary_emotional_leak"]
+        reasons = matrix["reasons_breakdown"]
+
+        score_color = PROFIT if disc_score >= 80 else (WARNING_TILT if disc_score >= 50 else LOSS)
+
+        # 3 KPI карточки: Discipline Score, Чистый Edge, Главная утечка
+        kpi_cards = [
+            # 1. Discipline Score
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            controls=[
+                                ft.Text("Discipline Score", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(f"{disc_score:.0f}%", size=10, weight=ft.FontWeight.BOLD, color=score_color, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, score_color),
+                                    padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                                    border_radius=3,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.ProgressBar(
+                            value=disc_score / 100.0,
+                            color=score_color,
+                            bgcolor=SURFACE_2,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                        ft.Text(
+                            f"{matrix['disciplined_trades']} из {matrix['total_trades']} сделок строго по системе",
+                            size=10,
+                            color=TEXT_SECONDARY,
+                            font_family=FONT_FAMILY,
+                        ),
+                    ],
+                    spacing=6,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 4, "md": 4},
+            ),
+            # 2. Чистый edge против факта
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Чистый результат без тильта", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Row(
+                            controls=[
+                                ft.Text(f"+${matrix['disciplined_net_pnl']:,.2f}", size=15, weight=ft.FontWeight.BOLD, color=PROFIT, font_family=FONT_MONO),
+                                ft.Text(f"Факт: ${matrix['actual_net_pnl']:,.2f}", size=10, color=TEXT_MUTED, font_family=FONT_MONO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        ),
+                        ft.Text(
+                            f"Тильт-сделки ({matrix['tilt_trades']}): -${tilt_drag:,.2f}" if tilt_drag > 0 else "Тильт-убытки не зафиксированы",
+                            size=10,
+                            color=LOSS if tilt_drag > 0 else PROFIT,
+                            font_family=FONT_MONO,
+                        ),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 4, "md": 4},
+            ),
+            # 3. Главная эмоциональная утечка
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Text("Ключевой фактор утечки PnL", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ft.Row(
+                            controls=[
+                                ft.Icon(ft.Icons.FIRE_EXTINGUISHER_ROUNDED if leak else ft.Icons.VERIFIED_ROUNDED, size=16, color=WARNING_TILT if leak else PROFIT),
+                                ft.Text(leak or "Все сделки по правилам", size=12, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        ft.Text(
+                            "Устранение этой ошибки вернет прибыль" if leak else "Отличная дисциплина и контроль риска",
+                            size=10,
+                            color=TEXT_MUTED,
+                            font_family=FONT_FAMILY,
+                        ),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 4, "md": 4},
+            ),
+        ]
+
+        # Список классифицированных ошибок
+        reason_pills = []
+        for r in reasons:
+            pill = ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Container(
+                            content=ft.Icon(ft.Icons.WARNING_ROUNDED, size=12, color=r["color"]),
+                            padding=3,
+                            bgcolor=ft.Colors.with_opacity(0.12, r["color"]),
+                            border_radius=3,
+                        ),
+                        ft.Text(r["name"], size=11, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                        ft.Text(f"{r['trades_count']} шт.", size=10, color=TEXT_MUTED, font_family=FONT_MONO),
+                        ft.Text(f"${r['net_pnl']:+,.2f}", size=11, weight=ft.FontWeight.BOLD, color=LOSS if r["net_pnl"] < 0 else PROFIT, font_family=FONT_MONO),
+                    ],
+                    spacing=6,
+                    tight=True,
+                ),
+                bgcolor=SURFACE_2,
+                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, ft.Colors.with_opacity(0.25, r["color"])),
+            )
+            reason_pills.append(pill)
+
+        header_chip = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.SHIELD_ROUNDED if tilt_drag == 0 else ft.Icons.LOCAL_FIRE_DEPARTMENT_ROUNDED, size=14, color=PROFIT if tilt_drag == 0 else LOSS),
+                    ft.Text(
+                        "100% Дисциплина • Edge чист" if tilt_drag == 0 else f"Утечка капитала: -${tilt_drag:,.2f}",
+                        size=10,
+                        weight=ft.FontWeight.BOLD,
+                        color=PROFIT if tilt_drag == 0 else LOSS,
+                        font_family=FONT_MONO,
+                    ),
+                ],
+                spacing=4,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, PROFIT if tilt_drag == 0 else LOSS),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, PROFIT if tilt_drag == 0 else LOSS)),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.PSYCHOLOGY_ROUNDED, color="#A855F7", size=18),
+                                    ft.Text("Аудит дисциплины и психологии", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Edgewonk Tilt & Alpha Leak Matrix)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_chip,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=kpi_cards, spacing=10, run_spacing=10),
+                    ft.Container(height=4),
+                    ft.Row(
+                        controls=[
+                            ft.Text("Категории нарушений:", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                            ft.Row(controls=reason_pills, spacing=8, wrap=True),
+                        ],
+                        spacing=8,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    ) if reason_pills else ft.Container(),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -1765,6 +1961,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Asset Allocation: {ex_asset}")
             self.asset_allocation_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга матрицы активов: {ex_asset}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.4 Обновление аудита психологии и тильта (Error Boundary)
+        try:
+            self.psychology_matrix_container.content = self._build_psychology_matrix_card(trades)
+        except Exception as ex_psy:
+            logging.exception(f"[DashboardView] Error rendering Psychology Matrix: {ex_psy}")
+            self.psychology_matrix_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга аудита психологии: {ex_psy}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

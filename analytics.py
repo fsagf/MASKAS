@@ -1231,6 +1231,94 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_psychology_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Квантовый аудит дисциплины и психологии трейдера (Edgewonk Emotional Tilt & Alpha Leak Matrix).
+        Рассчитывает 'Discipline Score', общую стоимость тильта (Tilt Drag), влияние эмоциональных
+        сделок на PnL и классифицирует психологические ошибки (Revenge, FOMO, Over-risk, Impulsive).
+        """
+        if not trades:
+            return {
+                "total_trades": 0,
+                "disciplined_trades": 0,
+                "tilt_trades": 0,
+                "discipline_score_pct": 100.0,
+                "disciplined_net_pnl": 0.0,
+                "tilt_net_pnl": 0.0,
+                "actual_net_pnl": 0.0,
+                "tilt_drag_amount": 0.0,
+                "primary_emotional_leak": None,
+                "reasons_breakdown": [],
+            }
+
+        total_cnt = len(trades)
+        disciplined_list = [t for t in trades if not getattr(t, "is_tilt", False)]
+        tilt_list = [t for t in trades if getattr(t, "is_tilt", False)]
+
+        disciplined_cnt = len(disciplined_list)
+        tilt_cnt = len(tilt_list)
+        discipline_score = round((disciplined_cnt / total_cnt) * 100.0, 1)
+
+        disciplined_pnl = round(float(sum(float(t.net_pnl or 0.0) for t in disciplined_list)), 2)
+        tilt_pnl = round(float(sum(float(t.net_pnl or 0.0) for t in tilt_list)), 2)
+        actual_pnl = round(disciplined_pnl + tilt_pnl, 2)
+
+        tilt_drag = round(abs(tilt_pnl) if tilt_pnl < 0 else 0.0, 2)
+
+        category_defs = {
+            "REVENGE": {"name": "Revenge Trading (Отыгрыш)", "icon": "local_fire_department_rounded", "color": "#EF4444"},
+            "FOMO": {"name": "FOMO (Вход на эмоциях)", "icon": "rocket_launch_rounded", "color": "#F59E0B"},
+            "OVER_RISK": {"name": "Превышение риска (>2x)", "icon": "warning_rounded", "color": "#EC4899"},
+            "CHECKLIST": {"name": "Нарушение чек-листа", "icon": "rule_rounded", "color": "#8B5CF6"},
+            "OTHER": {"name": "Прочие ошибки дисциплины", "icon": "psychology_rounded", "color": "#6B7280"},
+        }
+
+        breakdown_map: Dict[str, List[Trade]] = {k: [] for k in category_defs}
+        for t in tilt_list:
+            reason = (getattr(t, "tilt_reason", None) or getattr(t, "notes", "") or "").lower()
+            if any(w in reason for w in ["revenge", "отыгрыш", "реверс", "после лосса", "после стопа"]):
+                breakdown_map["REVENGE"].append(t)
+            elif any(w in reason for w in ["fomo", "фомо", "упущен", "вершина", "хаях", "погоня"]):
+                breakdown_map["FOMO"].append(t)
+            elif any(w in reason for w in ["риск", "over-risk", "объем", "плеч", "удвоен"]):
+                breakdown_map["OVER_RISK"].append(t)
+            elif any(w in reason for w in ["чек-лист", "правил", "план", "систем"]):
+                breakdown_map["CHECKLIST"].append(t)
+            else:
+                breakdown_map["OTHER"].append(t)
+
+        reasons_list = []
+        for cat_key, cat_trades in breakdown_map.items():
+            if not cat_trades:
+                continue
+            meta = category_defs[cat_key]
+            c_pnl = round(float(sum(float(t.net_pnl or 0.0) for t in cat_trades)), 2)
+            reasons_list.append({
+                "key": cat_key,
+                "name": meta["name"],
+                "icon": meta["icon"],
+                "color": meta["color"],
+                "trades_count": len(cat_trades),
+                "net_pnl": c_pnl,
+            })
+
+        reasons_list.sort(key=lambda x: x["net_pnl"])
+        primary_leak = reasons_list[0]["name"] if (reasons_list and reasons_list[0]["net_pnl"] < 0) else None
+
+        return {
+            "total_trades": total_cnt,
+            "disciplined_trades": disciplined_cnt,
+            "tilt_trades": tilt_cnt,
+            "discipline_score_pct": discipline_score,
+            "disciplined_net_pnl": disciplined_pnl,
+            "tilt_net_pnl": tilt_pnl,
+            "actual_net_pnl": actual_pnl,
+            "tilt_drag_amount": tilt_drag,
+            "primary_emotional_leak": primary_leak,
+            "reasons_breakdown": reasons_list,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[
