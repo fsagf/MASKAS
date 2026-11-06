@@ -116,6 +116,7 @@ class DashboardView(ft.Container):
         self.chart_container = ft.Container(expand=True)
         self.monte_carlo_container = ft.Container()
         self.session_matrix_container = ft.Container()
+        self.strategy_leaderboard_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -259,6 +260,8 @@ class DashboardView(ft.Container):
                 calendar_and_quant,
                 ft.Container(height=4),
                 self.session_matrix_container,
+                ft.Container(height=4),
+                self.strategy_leaderboard_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -812,6 +815,120 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_strategy_leaderboard_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный лидерборд торговых стратегий и сетапов (Edgewonk Strategy Matrix).
+        """
+        leaderboard = AnalyticsService.calculate_strategy_leaderboard(trades)
+
+        if not leaderboard:
+            items_content = ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Icon(ft.Icons.AUTO_AWESOME_ROUNDED, size=16, color=TEXT_MUTED),
+                        ft.Text("Добавьте теги стратегий к сделкам для формирования рейтинга доходности", size=12, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                    ],
+                    spacing=8,
+                ),
+                padding=12,
+            )
+            top_insight = "Рейтинг сетапов формируется автоматически"
+        else:
+            top_s = leaderboard[0]
+            top_insight = f"Топ-1 сетап: {top_s['tag']} ({top_s['net_pnl']:+,.2f} $ • PF: {top_s['profit_factor']:.2f})"
+
+            rank_colors = {1: "#FBBF24", 2: "#E8EAF0", 3: "#FB923C"}
+
+            rows = []
+            for item in leaderboard[:6]:
+                rk = item["rank"]
+                rk_col = rank_colors.get(rk, TEXT_MUTED)
+                pnl_col = PROFIT if item["net_pnl"] > 0 else (LOSS if item["net_pnl"] < 0 else TEXT_MUTED)
+
+                row_widget = ft.Container(
+                    content=ft.Row(
+                        controls=[
+                            ft.Container(
+                                content=ft.Text(f"#{rk}", size=11, weight=ft.FontWeight.BOLD, color=rk_col, font_family=FONT_MONO),
+                                width=32,
+                                alignment=ft.alignment.center_left,
+                            ),
+                            ft.Container(
+                                content=ft.Text(item["tag"], size=12, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                width=140,
+                            ),
+                            ft.Container(
+                                content=ft.Column(
+                                    controls=[
+                                        ft.Text(f"{item['winrate']:.1f}% WR ({item['win_trades']}/{item['trades_count']})", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                                        ft.ProgressBar(
+                                            value=item["winrate"] / 100.0,
+                                            color=PROFIT if item["winrate"] >= 50 else LOSS,
+                                            bgcolor=SURFACE_3,
+                                            height=4,
+                                            border_radius=ft.border_radius.all(2),
+                                        ),
+                                    ],
+                                    spacing=3,
+                                ),
+                                expand=True,
+                            ),
+                            ft.Container(
+                                content=ft.Text(f"PF: {item['profit_factor']:.2f} • SQN: {item['sqn']:.1f}", size=10, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                width=130,
+                                alignment=ft.alignment.center,
+                            ),
+                            ft.Container(
+                                content=ft.Text(f"{item['net_pnl']:+,.2f} $", size=13, weight=ft.FontWeight.BOLD, color=pnl_col, font_family=FONT_MONO),
+                                width=110,
+                                alignment=ft.alignment.center_right,
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    bgcolor=SURFACE_2,
+                    padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                    border_radius=RADIUS_MD,
+                    border=ft.border.all(1, BORDER_SUBTLE),
+                )
+                rows.append(row_widget)
+
+            items_content = ft.Column(controls=rows, spacing=6)
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.LEADERBOARD_ROUNDED, color=ACCENT_PRIMARY, size=18),
+                                    ft.Text("Лидерборд стратегий и сетапов", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Рейтинг эффективности Playbook)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            ft.Container(
+                                content=ft.Text(top_insight, size=10, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+                                padding=ft.padding.symmetric(horizontal=8, vertical=4),
+                                border_radius=RADIUS_SM,
+                                border=ft.border.all(1, ft.Colors.with_opacity(0.25, ACCENT_PRIMARY)),
+                            ),
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    items_content,
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -1280,6 +1397,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Session Matrix: {ex_sess}")
             self.session_matrix_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга матрицы сессий: {ex_sess}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.1 Обновление лидерборда стратегий (Error Boundary)
+        try:
+            self.strategy_leaderboard_container.content = self._build_strategy_leaderboard_card(trades)
+        except Exception as ex_lead:
+            logging.exception(f"[DashboardView] Error rendering Strategy Leaderboard: {ex_lead}")
+            self.strategy_leaderboard_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга лидерборда стратегий: {ex_lead}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

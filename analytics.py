@@ -848,6 +848,70 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_strategy_leaderboard(cls, trades: List[Trade]) -> List[Dict[str, Any]]:
+        """
+        Квантовый рейтинг торговых стратегий и сетапов (Edgewonk Strategy Leaderboard).
+        Ранжирует паттерны по совокупной прибыли, винрейту, Profit Factor и SQN.
+        """
+        if not trades:
+            return []
+
+        grouped: Dict[str, List[Trade]] = {}
+        for t in trades:
+            tag = (t.strategy_tag or "Общая").strip()
+            if not tag:
+                tag = "Общая"
+            if tag not in grouped:
+                grouped[tag] = []
+            grouped[tag].append(t)
+
+        leaderboard = []
+        for tag, s_trades in grouped.items():
+            count = len(s_trades)
+            pnls = [float(t.net_pnl or 0.0) for t in s_trades]
+            wins = [p for p in pnls if p > 0]
+            losses = [p for p in pnls if p < 0]
+            gross_w = float(sum(wins))
+            gross_l = float(abs(sum(losses)))
+
+            winrate = round(len(wins) / count * 100, 1) if count > 0 else 0.0
+            net_pnl = round(float(sum(pnls)), 2)
+            pf = round(gross_w / gross_l, 2) if gross_l > 0 else (99.9 if gross_w > 0 else 1.0)
+            avg_pnl = round(net_pnl / count, 2) if count > 0 else 0.0
+
+            r_vals = [t.r_multiple for t in s_trades if t.r_multiple is not None]
+            avg_r = round(float(np.mean(r_vals)), 2) if r_vals else 0.0
+
+            if len(r_vals) >= 2:
+                std_r = float(np.std(r_vals, ddof=1))
+                sqn = round(math.sqrt(min(len(r_vals), 100)) * (avg_r / std_r), 2) if std_r > 0.0001 else 0.0
+            else:
+                sqn = 0.0
+
+            leaderboard.append({
+                "tag": tag,
+                "trades_count": count,
+                "win_trades": len(wins),
+                "loss_trades": len(losses),
+                "winrate": winrate,
+                "gross_profit": round(gross_w, 2),
+                "gross_loss": round(gross_l, 2),
+                "net_pnl": net_pnl,
+                "profit_factor": pf,
+                "avg_trade_pnl": avg_pnl,
+                "avg_r": avg_r,
+                "sqn": sqn,
+            })
+
+        # Сортировка: сначала самые прибыльные стратегии
+        leaderboard.sort(key=lambda x: (x["net_pnl"], x["profit_factor"]), reverse=True)
+
+        for idx, item in enumerate(leaderboard, start=1):
+            item["rank"] = idx
+
+        return leaderboard
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

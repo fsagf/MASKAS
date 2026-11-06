@@ -414,5 +414,42 @@ def test_kelly_criterion_and_streaks():
     assert metrics.current_streak == 1
 
 
+def test_strategy_leaderboard_matrix():
+    """Verify strategy grouping, profit factor, winrate, and ranking in strategy leaderboard."""
+    # 1. Empty trades
+    assert AnalyticsService.calculate_strategy_leaderboard([]) == []
+
+    # 2. Trades with distinct strategies
+    t_bo1 = Trade(strategy_tag="Breakout", direction="LONG", entry_price=100.0, exit_price=150.0, volume=10.0, stop_loss=90.0)    # +$500
+    t_bo2 = Trade(strategy_tag="Breakout", direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0, stop_loss=90.0)    # +$300
+    t_mr_win = Trade(strategy_tag="Mean Reversion", direction="LONG", entry_price=100.0, exit_price=120.0, volume=10.0, stop_loss=90.0)  # +$200
+    t_mr_loss = Trade(strategy_tag="Mean Reversion", direction="LONG", entry_price=100.0, exit_price=60.0, volume=10.0, stop_loss=90.0)   # -$400
+    t_scalp = Trade(strategy_tag="Scalp", direction="SHORT", entry_price=100.0, exit_price=110.0, volume=10.0, stop_loss=110.0)   # -$100
+
+    trades = [t_bo1, t_bo2, t_mr_win, t_mr_loss, t_scalp]
+    board = AnalyticsService.calculate_strategy_leaderboard(trades)
+
+    assert len(board) == 3
+
+    # Rank 1: Breakout (+800)
+    assert board[0]["tag"] == "Breakout"
+    assert board[0]["rank"] == 1
+    assert board[0]["net_pnl"] == 800.0
+    assert board[0]["winrate"] == 100.0
+    assert board[0]["trades_count"] == 2
+
+    # Rank 2: Scalp (-100)
+    assert board[1]["tag"] == "Scalp"
+    assert board[1]["rank"] == 2
+    assert board[1]["net_pnl"] == -100.0
+
+    # Rank 3: Mean Reversion (-200)
+    assert board[2]["tag"] == "Mean Reversion"
+    assert board[2]["rank"] == 3
+    assert board[2]["net_pnl"] == -200.0
+    assert board[2]["winrate"] == 50.0
+
+
+
 
 

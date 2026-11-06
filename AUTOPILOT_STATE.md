@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 4 (Completed) -> Starting Iteration 5
+- **Iteration:** 5 (Completed) -> Starting Iteration 6
 - **Current Phase:** Phase 4: Full Regression & Close Loop
-- **Status:** All 36 Tests Green (100% Passing). Kelly Criterion & Streaks Engine Deployed.
+- **Status:** All 37 Tests Green (100% Passing). Strategy & Setup Leaderboard Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://172.20.10.4:8550` (Daemon task running)
 
@@ -46,21 +46,25 @@
   - Upgraded `DashboardView` trade count KPI card with live streak indicator (`Серия: +3 • Ср: +$120.0`).
   - Added dynamic Half-Kelly risk guidance to Monte Carlo Quant footer.
   - Added AI Coach rule in `WaveAICoachService`: recommends position sizing according to Kelly Criterion.
+- [x] **Strategy & Setup Leaderboard Matrix (Iteration 5):**
+  - Implemented `AnalyticsService.calculate_strategy_leaderboard(trades)`: aggregates and ranks trading strategies/playbook setups by Net PnL, Profit Factor, Winrate, and SQN.
+  - Created `_build_strategy_leaderboard_card` in `ui/views/dashboard.py` with medal badges (#1 Gold, #2 Silver, #3 Bronze), winrate progress bars, and profit factor indicators.
+  - Integrated into `DashboardView` between Session Matrix and Time Heatmap.
 - [x] **Monte Carlo Simulator:** 10,000 bootstrap simulations accounting for initial account balance and equity cone percentiles (5th, 50th, 95th).
 - [x] **Tilt & Psychology Engine:** Detects revenge trading (<10 min cooldown after loss), over-risking (>2x avg risk), and break-even violation patterns.
 - [x] **Wave AI Coach:** Rule-based quant trading coach diagnosing fee drag, MAE/MFE retention loss, risk discipline, and Kelly sizing.
 - [x] **High-Performance Local Server Runner:** `run_local_server.py` with multi-adapter IP detection, VPN warning, terminal ASCII QR-code, and 1-click `ЗАПУСК_СЕРВЕРА.bat`.
-- [x] **Total QA Suite (36 tests):**
+- [x] **Total QA Suite (37 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 9 tests (including SQN, Sharpe/Sortino, Session Matrix, Time Heatmap, Kelly & Streaks).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 10 tests (including SQN, Sharpe/Sortino, Session Matrix, Time Heatmap, Kelly & Streaks, Strategy Leaderboard).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Time Heatmap and Session Matrix renders).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Strategy Leaderboard card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 5+)
-- [ ] **Edgewonk:** Strategy / Setup Leaderboard with 1-click filter in Journal (Iteration 5 Target).
-- [ ] **TraderSync / Linear:** Linear-style keyboard shortcut command palette (Ctrl+K) for instant trade lookup and modal triggers.
+## Competitor Backlog (R&D for Iteration 6+)
+- [ ] **TraderSync / Linear:** Linear-style keyboard shortcut command palette (Ctrl+K) for instant trade lookup, filter by strategy, and modal triggers (Iteration 6 Target).
 - [ ] **TradeZella:** Trade Duration vs PnL distribution scatter analysis.
+- [ ] **Edgewonk:** Emotional State & Psychology Matrix (tracking Discipline, Fear, Greed, FOMO impact on PnL).
