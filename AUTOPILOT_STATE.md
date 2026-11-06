@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 24 (Completed) -> Starting Iteration 25
+- **Iteration:** 25 (Completed) -> Starting Iteration 26
 - **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 55 Tests Green (100% Passing). Prop Firm Consistency Radar & Challenge Readiness Deployed.
+- **Status:** All 56 Tests Green (100% Passing). Stop Loss & Take Profit Placement Efficiency Engine Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -169,17 +169,25 @@
   - Computes Composite Consistency Score (0-100%) and categorizes readiness: `FUNDED_READY` (Score >= 80%), `QUALIFIED` (65-79%), `LOTTERY_DEPENDENCY` (flags lottery-trade outlier risks), and `HIGH_VARIANCE`.
   - Created `_build_prop_consistency_card` in `ui/views/dashboard.py` featuring 4 responsive KPI cards, pass/fail status chips, progress bars, and actionable challenge readiness insight bar.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (55 tests):**
+- [x] **Stop Loss & Take Profit Placement Efficiency Engine (Iteration 25):**
+  - Implemented `AnalyticsService.calculate_order_placement_efficiency(trades)`: models Edgewonk's order placement optimizer based on historical MFE, MAE, and actual exit execution.
+  - Detects Premature Stop-Outs (trades stopped out before price hit target direction) and quantifies dollar loss drag.
+  - Detects Early Exit Leakage (unrealized profit left on table by prematurely closing winners).
+  - Computes Target Capture Efficiency % (ratio of realized profit to maximum favorable excursion potential).
+  - Computes Stop Loss Buffer Recommendation (+25% expansion recommendation when premature stops exceed 30% of losses).
+  - Created `_build_order_placement_card` in `ui/views/dashboard.py` with 4 responsive KPI cards, placement grade badge (`A+`, `A`, `B`, `C`), capture progress bar, and actionable calibration insight bar.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (56 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 28 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix, Tag Attribution Matrix, Rolling Edge Decay Matrix, Prop Consistency Radar).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 29 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix, Tag Attribution Matrix, Rolling Edge Decay Matrix, Prop Consistency Radar, Order Placement Efficiency).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Prop Consistency Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Order Placement Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 25+)
-- [ ] **Edgewonk:** Optimal Stop Loss & Profit Target Placement Efficiency Curve.
+## Competitor Backlog (R&D for Iteration 26+)
 - [ ] **QuantConnect / TradeMetria:** Alpha Factor Information Coefficient (IC) & Predictive Edge Persistence Matrix.
 - [ ] **TraderSync:** Trade Management Efficiency & Trailing Stop Alpha Drag Matrix.
+- [ ] **TradeZella:** Liquidity Sweep & Order Flow Footprint Imbalance Confluence Matrix.

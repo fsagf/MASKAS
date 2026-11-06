@@ -3356,6 +3356,110 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_order_placement_efficiency(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Аудит эффективности размещения Stop Loss и Take Profit ордеров (Edgewonk Order Placement Audit).
+        Выявляет:
+        - Преждевременные стоп-ауты (Premature Stop-Outs): сделки, выбитые по стопу до движения к цели.
+        - Утечку раннего выхода (Early Exit Leakage): недополученную прибыль из-за досрочного закрытия тейк-профита.
+        - Эффективность захвата цели (Target Capture Efficiency %): отношение реального профита к потенциалу MFE.
+        - Рекомендацию по калибровке буфера Stop Loss (слишком тесный стоп против избыточного риска).
+        """
+        if not trades:
+            return {
+                "target_capture_efficiency_pct": 0.0,
+                "premature_stopout_count": 0,
+                "premature_stopout_drag": 0.0,
+                "early_exit_leakage": 0.0,
+                "placement_grade": "N/A",
+                "grade_color": "#94A3B8",
+                "optimal_sl_buffer_recommendation": "1.0x (Базовый)",
+                "placement_insight": "Нет данных по ордерам для анализа эффективности размещения SL/TP",
+                "total_trades": 0,
+            }
+
+        premature_count = 0
+        premature_drag = 0.0
+        early_leakage = 0.0
+        total_win_pnl = 0.0
+        total_win_mfe = 0.0
+        win_mae_list = []
+        loss_cnt = 0
+
+        for t in trades:
+            pnl = float(t.net_pnl or 0.0)
+            mae = float(getattr(t, "mae", 0.0) or 0.0)
+            mfe = float(getattr(t, "mfe", 0.0) or 0.0)
+
+            # Если MFE/MAE не зафиксированы биржей, применяем эвристическую нормализацию
+            notes = str(getattr(t, "notes", "") or "").lower()
+            if mfe == 0.0 and pnl > 0:
+                mfe = pnl * 1.25
+            if mae == 0.0 and pnl < 0:
+                mae = abs(pnl)
+
+            # Проверка ключевых слов о выбитом стопе в заметках
+            is_stopped_out_keyword = any(k in notes for k in ("выбило", "выбило в безубыток", "выбило стоп", "преждевремен", "пошел без меня"))
+
+            if pnl < 0:
+                loss_cnt += 1
+                # Если сделку закрыло в минус, но MFE был существенным (цена шла в нашу сторону)
+                if (mfe >= abs(pnl) * 0.8) or is_stopped_out_keyword:
+                    premature_count += 1
+                    premature_drag += abs(pnl)
+            elif pnl > 0:
+                total_win_pnl += pnl
+                total_win_mfe += max(mfe, pnl)
+                if mfe > pnl:
+                    early_leakage += (mfe - pnl)
+                if mae > 0:
+                    win_mae_list.append(mae)
+
+        # Эффективность захвата цели
+        if total_win_mfe > 0:
+            target_capture = round((total_win_pnl / total_win_mfe) * 100.0, 1)
+        else:
+            target_capture = 0.0
+
+        premature_drag = round(premature_drag, 2)
+        early_leakage = round(early_leakage, 2)
+
+        # Рекомендация по буферу стопа
+        premature_ratio = (premature_count / loss_cnt * 100.0) if loss_cnt > 0 else 0.0
+        if premature_ratio >= 30.0:
+            buffer_rec = "+25% (Расширить SL)"
+            grade = "C"
+            grade_color = "#F59E0B"
+            insight = f"Стоп-лосс слишком тесный: {premature_count} сделок выбито до движения к цели (убыток -${premature_drag:,.2f}). Рекомендуется расширить буфер на 25%"
+        elif target_capture >= 75.0 and premature_count == 0:
+            buffer_rec = "Оптимально (1.0x)"
+            grade = "A+"
+            grade_color = "#10B981"
+            insight = f"Идеальная калибровка: захват 75%+ потенциала движения ({target_capture}%), преждевременных стоп-аутов не обнаружено"
+        elif target_capture >= 60.0:
+            buffer_rec = "Стабильно (1.0x)"
+            grade = "A"
+            grade_color = "#10B981"
+            insight = f"Высокая эффективность тейков ({target_capture}%). Недополученная прибыль из-за ранних выходов: ${early_leakage:,.2f}"
+        else:
+            buffer_rec = "Подтянуть TP (-15%)"
+            grade = "B"
+            grade_color = "#38BDF8"
+            insight = f"Ранние выходы: оставлено на столе ${early_leakage:,.2f}. Рекомендуется использовать трейлинг-стоп или забирать фикс на первом сопротивлении"
+
+        return {
+            "target_capture_efficiency_pct": target_capture,
+            "premature_stopout_count": premature_count,
+            "premature_stopout_drag": premature_drag,
+            "early_exit_leakage": early_leakage,
+            "placement_grade": grade,
+            "grade_color": grade_color,
+            "optimal_sl_buffer_recommendation": buffer_rec,
+            "placement_insight": insight,
+            "total_trades": len(trades),
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[

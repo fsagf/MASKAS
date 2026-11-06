@@ -135,6 +135,7 @@ class DashboardView(ft.Container):
         self.tag_attribution_container = ft.Container()
         self.rolling_edge_container = ft.Container()
         self.prop_consistency_container = ft.Container()
+        self.order_placement_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
 
@@ -316,6 +317,8 @@ class DashboardView(ft.Container):
                 self.rolling_edge_container,
                 ft.Container(height=4),
                 self.prop_consistency_container,
+                ft.Container(height=4),
+                self.order_placement_container,
                 ft.Container(height=4),
                 self.time_heatmap,
                 ft.Container(height=40),  # Свободный скролл
@@ -4062,6 +4065,192 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_order_placement_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивный аудит эффективности размещения Stop Loss и Take Profit (Edgewonk Order Placement Audit).
+        """
+        matrix = AnalyticsService.calculate_order_placement_efficiency(trades)
+        grade = matrix["placement_grade"]
+        grade_color = matrix["grade_color"]
+        capture_pct = matrix["target_capture_efficiency_pct"]
+        premature_drag = matrix["premature_stopout_drag"]
+        early_leak = matrix["early_exit_leakage"]
+        sl_buffer = matrix["optimal_sl_buffer_recommendation"]
+        insight = matrix["placement_insight"]
+
+        header_badge = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(ft.Icons.GPS_FIXED_ROUNDED, size=13, color=grade_color),
+                    ft.Text(f"ГРЕЙД: {grade} • Захват: {capture_pct}%", size=10, weight=ft.FontWeight.BOLD, color=grade_color, font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, grade_color),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.35, grade_color)),
+        )
+
+        kpis = [
+            # 1. Target Capture Efficiency
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Эффективность тейков", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text("MFE ЗАХВАТ", size=9, weight=ft.FontWeight.BOLD, color=grade_color, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, grade_color),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{capture_pct}%", size=18, weight=ft.FontWeight.BOLD, color=grade_color, font_family=FONT_MONO),
+                        ft.ProgressBar(
+                            value=capture_pct / 100.0,
+                            color=grade_color,
+                            bgcolor=SURFACE_1,
+                            height=4,
+                            border_radius=RADIUS_SM,
+                        ),
+                    ],
+                    spacing=4,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 2. Premature Stop-Out Drag
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Преждевременные стопы", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(f"{matrix['premature_stopout_count']} сделок", size=9, weight=ft.FontWeight.BOLD, color=LOSS if premature_drag > 0 else PROFIT, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, LOSS if premature_drag > 0 else PROFIT),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"-${premature_drag:,.2f}" if premature_drag > 0 else "$0.00", size=18, weight=ft.FontWeight.BOLD, color=LOSS if premature_drag > 0 else PROFIT, font_family=FONT_MONO),
+                        ft.Text("Убыток до хода к цели", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 3. Early Exit Leakage
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Утечка ранних выходов", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text("НА СТОЛЕ", size=9, weight=ft.FontWeight.BOLD, color=WARNING_TILT, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, WARNING_TILT),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"${early_leak:,.2f}", size=18, weight=ft.FontWeight.BOLD, color=WARNING_TILT, font_family=FONT_MONO),
+                        ft.Text("Недополученный профит MFE", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+            # 4. SL Buffer Recommendation
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Буфер Stop Loss", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text("КАЛИБРОВКА", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(sl_buffer, size=15, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_MONO),
+                        ft.Text("Рекомендация по ATR буферу", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"xs": 12, "sm": 6, "md": 3},
+            ),
+        ]
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.GPS_FIXED_ROUNDED, color="#A855F7", size=18),
+                                    ft.Text("Эффективность размещения Stop Loss и Take Profit", size=14, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Text("(Edgewonk Placement Audit)", size=11, color=TEXT_MUTED, font_family=FONT_MONO),
+                                ],
+                                spacing=8,
+                            ),
+                            header_badge,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Container(height=4),
+                    ft.ResponsiveRow(controls=kpis, spacing=10, run_spacing=10),
+                    ft.Container(
+                        content=ft.Row(
+                            [
+                                ft.Icon(ft.Icons.AUTO_AWESOME_ROUNDED, size=13, color=grade_color),
+                                ft.Text(insight, size=11, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ],
+                            spacing=6,
+                        ),
+                        bgcolor=SURFACE_2,
+                        padding=ft.padding.symmetric(horizontal=12, vertical=6),
+                        border_radius=RADIUS_SM,
+                        border=ft.border.all(1, BORDER_SUBTLE),
+                    ),
+                ],
+                spacing=6,
+            ),
+            bgcolor=SURFACE_1,
+            padding=16,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -4724,6 +4913,16 @@ class DashboardView(ft.Container):
             logging.exception(f"[DashboardView] Error rendering Prop Consistency Radar: {ex_prop}")
             self.prop_consistency_container.content = ft.Container(
                 content=ft.Text(f"Ошибка рендеринга радара консистентности: {ex_prop}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
+        # 5.20 Обновление эффективности размещения SL/TP (Error Boundary)
+        try:
+            self.order_placement_container.content = self._build_order_placement_card(trades)
+        except Exception as ex_op:
+            logging.exception(f"[DashboardView] Error rendering Order Placement Card: {ex_op}")
+            self.order_placement_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга эффективности ордеров: {ex_op}", color=ft.Colors.ERROR),
                 padding=12,
             )
 

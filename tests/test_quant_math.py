@@ -1166,6 +1166,44 @@ def test_prop_consistency_radar():
     assert "Риск дисквалификации" in mat_lottery["consistency_insight"]
 
 
+def test_order_placement_efficiency():
+    """Verify Edgewonk SL/TP placement efficiency, premature stop-outs and MFE capture ratio."""
+    # 1. Empty trades
+    empty_mat = AnalyticsService.calculate_order_placement_efficiency([])
+    assert empty_mat["target_capture_efficiency_pct"] == 0.0
+    assert empty_mat["premature_stopout_count"] == 0
+    assert empty_mat["placement_grade"] == "N/A"
+
+    # 2. Winning trades with high capture efficiency
+    t_win1 = Trade(direction="LONG", entry_price=100.0, exit_price=140.0, volume=10.0)
+    t_win1.mfe = 450.0
+    t_win2 = Trade(direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0)
+    t_win2.mfe = 320.0
+    trades_optimal = [t_win1, t_win2]
+
+    mat_opt = AnalyticsService.calculate_order_placement_efficiency(trades_optimal)
+    assert mat_opt["target_capture_efficiency_pct"] > 85.0
+    assert mat_opt["premature_stopout_count"] == 0
+    assert mat_opt["premature_stopout_drag"] == 0.0
+    assert mat_opt["placement_grade"] in ("A+", "A")
+
+    # 3. Trades with premature stop-out and early leakage
+    t_loss_premature = Trade(direction="LONG", entry_price=100.0, exit_price=85.0, volume=10.0, notes="выбило стоп и полетело")
+    t_loss_premature.mfe = 300.0
+    t_win_early = Trade(direction="LONG", entry_price=100.0, exit_price=110.0, volume=10.0)
+    t_win_early.mfe = 400.0
+
+    trades_leaking = [t_loss_premature, t_win_early]
+    mat_leak = AnalyticsService.calculate_order_placement_efficiency(trades_leaking)
+
+    assert mat_leak["premature_stopout_count"] == 1
+    assert mat_leak["premature_stopout_drag"] == 150.0
+    assert mat_leak["early_exit_leakage"] == 300.0
+    assert "Стоп-лосс слишком тесный" in mat_leak["placement_insight"]
+    assert mat_leak["optimal_sl_buffer_recommendation"] == "+25% (Расширить SL)"
+
+
+
 
 
 

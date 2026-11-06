@@ -142,6 +142,11 @@ def test_dashboard_view_headless_render():
     assert prop_card is not None
     assert dash.prop_consistency_container is not None
 
+    # Verify Order placement efficiency card renders cleanly
+    order_card = dash._build_order_placement_card(trades=[])
+    assert order_card is not None
+    assert dash.order_placement_container is not None
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 
