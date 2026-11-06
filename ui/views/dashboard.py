@@ -138,8 +138,28 @@ class DashboardView(ft.Container):
         self.order_placement_container = ft.Container()
         self.factor_ic_container = ft.Container()
         self.trade_management_container = ft.Container()
+        self.liquidity_sweep_container = ft.Container()
         self.pnl_calendar = PnLCalendar(on_date_selected=self.on_date_selected)
         self.time_heatmap = TimeHeatmap()
+
+        # Модульная навигация аналитического хаба (Analytics Hub)
+        self.active_category: str = "sessions"
+        self.category_tabs_row = ft.Row(spacing=8, scroll=ft.ScrollMode.ADAPTIVE)
+        self.category_search_input = ft.TextField(
+            hint_text="Поиск модуля (тильт, сессия, IC, ордера, ликвидность...)",
+            hint_style=ft.TextStyle(size=12, color=TEXT_MUTED, font_family=FONT_FAMILY),
+            text_style=ft.TextStyle(size=12, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+            prefix_icon=ft.Icons.SEARCH_ROUNDED,
+            border_color=BORDER_SUBTLE,
+            focused_border_color=ACCENT_PRIMARY,
+            dense=True,
+            content_padding=ft.padding.symmetric(horizontal=12, vertical=8),
+            border_radius=RADIUS_MD,
+            bgcolor=SURFACE_1,
+            width=320,
+            on_change=self._on_search_change,
+        )
+        self.category_modules_column = ft.Column(spacing=10)
 
         # Переключатель тильт-фильтра
         self.tilt_switch = ft.Switch(
@@ -270,6 +290,50 @@ class DashboardView(ft.Container):
             run_spacing=14,
         )
 
+        # Инициализация переключателя категорий и фильтра
+        self._rebuild_category_tabs()
+        self.category_modules_column.controls = self._get_category_controls(self.active_category, "")
+
+        analytics_hub_bar = ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.ANALYTICS_ROUNDED, color=ACCENT_PRIMARY, size=18),
+                                    ft.Text("Квантовый хаб аналитики (Analytics Hub)", size=15, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Container(
+                                        content=ft.Text("MODULAR", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                        bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+                                        padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                                        border_radius=4,
+                                        border=ft.border.all(1, ft.Colors.with_opacity(0.3, ACCENT_PRIMARY)),
+                                    ),
+                                ],
+                                spacing=8,
+                            ),
+                            self.category_search_input,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Text(
+                        "Модульные срезы эффективности: выберите категорию для фокусного аудита или переключитесь на полный просмотр.",
+                        size=12,
+                        color=TEXT_SECONDARY,
+                        font_family=FONT_FAMILY,
+                    ),
+                    ft.Container(height=2),
+                    self.category_tabs_row,
+                ],
+                spacing=8,
+            ),
+            padding=ft.padding.symmetric(horizontal=16, vertical=12),
+            bgcolor=SURFACE_1,
+            border_radius=RADIUS_MD,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
         return ft.Column(
             controls=[
                 header,
@@ -279,60 +343,161 @@ class DashboardView(ft.Container):
                 chart_card,
                 ft.Container(height=4),
                 calendar_and_quant,
+                ft.Container(height=8),
+                analytics_hub_bar,
                 ft.Container(height=4),
-                self.session_matrix_container,
-                ft.Container(height=4),
-                self.strategy_leaderboard_container,
-                ft.Container(height=4),
-                self.duration_analysis_container,
-                ft.Container(height=4),
-                self.asset_allocation_container,
-                ft.Container(height=4),
-                self.psychology_matrix_container,
-                ft.Container(height=4),
-                self.drawdown_recovery_container,
-                ft.Container(height=4),
-                self.excursion_matrix_container,
-                ft.Container(height=4),
-                self.monthly_phase_container,
-                ft.Container(height=4),
-                self.sizing_simulator_container,
-                ft.Container(height=4),
-                self.market_regime_container,
-                ft.Container(height=4),
-                self.r_distribution_container,
-                ft.Container(height=4),
-                self.rr_efficiency_container,
-                ft.Container(height=4),
-                self.rule_violation_container,
-                ft.Container(height=4),
-                self.mtf_alignment_container,
-                ft.Container(height=4),
-                self.compliance_routine_container,
-                ft.Container(height=4),
-                self.session_overlap_container,
-                ft.Container(height=4),
-                self.setup_grading_container,
-                ft.Container(height=4),
-                self.tag_attribution_container,
-                ft.Container(height=4),
-                self.rolling_edge_container,
-                ft.Container(height=4),
-                self.prop_consistency_container,
-                ft.Container(height=4),
-                self.order_placement_container,
-                ft.Container(height=4),
-                self.factor_ic_container,
-                ft.Container(height=4),
-                self.trade_management_container,
-                ft.Container(height=4),
-                self.time_heatmap,
+                self.category_modules_column,
                 ft.Container(height=40),  # Свободный скролл
             ],
             spacing=10,
             scroll=ft.ScrollMode.AUTO,
             expand=True,
         )
+
+    def _rebuild_category_tabs(self) -> None:
+        """Перестраивает интерактивные чипсы-вкладки категорий аналитики."""
+        categories = [
+            ("sessions", "⏱️ Время & Сессии", "5", ft.Icons.ACCESS_TIME_ROUNDED),
+            ("psychology", "🧠 Психология & Риск", "5", ft.Icons.PSYCHOLOGY_ROUNDED),
+            ("setups", "🎯 Сетапы & Альфа", "8", ft.Icons.TRACK_CHANGES_ROUNDED),
+            ("execution", "⚡ Исполнение & Сделки", "6", ft.Icons.BOLT_ROUNDED),
+            ("prop", "🏆 Проп-Трейдинг", "1", ft.Icons.EMOJI_EVENTS_ROUNDED),
+            ("all", "📑 Все модули сразу", "25", ft.Icons.DASHBOARD_ROUNDED),
+        ]
+
+        pills = []
+        for key, title, count_badge, icon in categories:
+            is_active = (key == self.active_category)
+            bg = ft.Colors.with_opacity(0.18, ACCENT_PRIMARY) if is_active else SURFACE_2
+            border_col = ACCENT_PRIMARY if is_active else BORDER_SUBTLE
+            text_col = TEXT_PRIMARY if is_active else TEXT_SECONDARY
+            badge_bg = ACCENT_PRIMARY if is_active else SURFACE_3
+            badge_text_col = ft.Colors.WHITE if is_active else TEXT_MUTED
+
+            def _create_handler(cat_key=key):
+                return lambda _: self._on_category_select(cat_key)
+
+            pill = ft.Container(
+                content=ft.Row(
+                    controls=[
+                        ft.Icon(icon, size=15, color=ACCENT_PRIMARY if is_active else TEXT_MUTED),
+                        ft.Text(title, size=12, weight=ft.FontWeight.W_600 if is_active else ft.FontWeight.W_500, color=text_col, font_family=FONT_FAMILY),
+                        ft.Container(
+                            content=ft.Text(count_badge, size=9, weight=ft.FontWeight.BOLD, color=badge_text_col, font_family=FONT_MONO),
+                            bgcolor=badge_bg,
+                            padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                            border_radius=RADIUS_SM,
+                        ),
+                    ],
+                    spacing=6,
+                    tight=True,
+                ),
+                bgcolor=bg,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1.2 if is_active else 1, border_col),
+                padding=ft.padding.symmetric(horizontal=12, vertical=8),
+                ink=True,
+                on_click=_create_handler(key),
+            )
+            pills.append(pill)
+
+        self.category_tabs_row.controls = pills
+
+    def _on_category_select(self, cat_key: str) -> None:
+        self.active_category = cat_key
+        self._rebuild_category_tabs()
+        query = getattr(self.category_search_input, "value", "") or ""
+        self.category_modules_column.controls = self._get_category_controls(self.active_category, query)
+        if self.page:
+            try:
+                self.category_tabs_row.update()
+                self.category_modules_column.update()
+            except Exception:
+                pass
+
+    def _on_search_change(self, e) -> None:
+        query = getattr(e.control, "value", "") or ""
+        self.category_modules_column.controls = self._get_category_controls(self.active_category, query)
+        if self.page:
+            try:
+                self.category_modules_column.update()
+            except Exception:
+                pass
+
+    def _get_category_controls(self, cat_key: str, search_query: str = "") -> List[ft.Control]:
+        """Возвращает список аналитических контейнеров для выбранной категории с учетом фильтрации."""
+        category_map = {
+            "sessions": [
+                ("Матрица торговых сессий", self.session_matrix_container),
+                ("Арбитраж перекрытия сессий", self.session_overlap_container),
+                ("Время удержания позиций", self.duration_analysis_container),
+                ("Тепловая карта времени 7x24", self.time_heatmap),
+                ("Фазы месяца и сезонность", self.monthly_phase_container),
+            ],
+            "psychology": [
+                ("Аудит психологии и дисциплины", self.psychology_matrix_container),
+                ("Утечки нарушения торгового плана", self.rule_violation_container),
+                ("Анализ просадки и восстановления", self.drawdown_recovery_container),
+                ("Симулятор риск-менеджмента и сайзинга", self.sizing_simulator_container),
+                ("Контроль дисциплины и пре-трейд рутины", self.compliance_routine_container),
+            ],
+            "setups": [
+                ("Лидерборд стратегий и сетапов", self.strategy_leaderboard_container),
+                ("Грейдинг качества сетапов (A+/B/C)", self.setup_grading_container),
+                ("Снятие ликвидности & Footprint Order Flow", self.liquidity_sweep_container),
+                ("Облако факторных тегов", self.tag_attribution_container),
+                ("Предсказательная сила факторов (IC)", self.factor_ic_container),
+                ("Согласованность с рыночным режимом", self.market_regime_container),
+                ("Мульти-таймфрейм согласованность (MTF)", self.mtf_alignment_container),
+                ("Аллокация по активам и концентрация", self.asset_allocation_container),
+            ],
+            "execution": [
+                ("Аудит управления позицией (BE & Trailing)", self.trade_management_container),
+                ("Эффективность расстановки SL и TP", self.order_placement_container),
+                ("Матрица экскурсий MAE / MFE", self.excursion_matrix_container),
+                ("Распределение исходов R-Multiple", self.r_distribution_container),
+                ("Кривая эффективности Риск/Прибыль", self.rr_efficiency_container),
+                ("Скользящий 30-дневный импульс эджа", self.rolling_edge_container),
+            ],
+            "prop": [
+                ("Радар соответствия правилам проп-фирм", self.prop_consistency_container),
+            ],
+        }
+
+        q = (search_query or "").strip().lower()
+        controls = []
+
+        if cat_key == "all":
+            for cat_id, items in category_map.items():
+                for title, ctrl in items:
+                    if not q or q in title.lower():
+                        controls.append(ctrl)
+                        controls.append(ft.Container(height=4))
+        else:
+            items = category_map.get(cat_key, [])
+            for title, ctrl in items:
+                if not q or q in title.lower():
+                    controls.append(ctrl)
+                    controls.append(ft.Container(height=4))
+
+        if not controls:
+            controls.append(
+                ft.Container(
+                    content=ft.Column(
+                        controls=[
+                            ft.Icon(ft.Icons.SEARCH_OFF_ROUNDED, size=38, color=TEXT_MUTED),
+                            ft.Text(f"Модулей по запросу «{search_query}» не найдено", size=14, color=TEXT_SECONDARY, font_family=FONT_FAMILY),
+                            ft.Text("Попробуйте сбросить поиск или переключиться на вкладку «Все модули»", size=12, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                        ],
+                        horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=6,
+                    ),
+                    padding=36,
+                    alignment=ft.alignment.center,
+                )
+            )
+
+        return controls
 
     def _build_skeleton_grid(self) -> List[ft.Control]:
         """Возвращает заглушки-скелетоны для индикации плавной загрузки дашборда."""
@@ -4564,6 +4729,249 @@ class DashboardView(ft.Container):
             border=ft.border.all(1, BORDER_SUBTLE),
         )
 
+    def _build_liquidity_sweep_card(self, trades: List[Trade]) -> ft.Container:
+        """
+        Интерактивная матрица снятия ликвидности и потока ордеров (TradeZella & Bookmap Order Flow Engine).
+        """
+        matrix = AnalyticsService.calculate_liquidity_sweep_matrix(trades)
+        total = matrix["total_trades"]
+        confl_cnt = matrix["confluence_trades_count"]
+        sw_wr = matrix["sweep_winrate"]
+        naive_wr = matrix["naive_winrate"]
+        wr_alpha = matrix["winrate_alpha"]
+        sw_pf = matrix["sweep_profit_factor"]
+        sw_net = matrix["sweep_net_pnl"]
+        naive_net = matrix["naive_net_pnl"]
+        abs_eff = matrix["absorption_efficiency_pct"]
+        top_arch = matrix["top_archetype"]
+        archs = matrix["archetypes"]
+        badge_col = matrix["badge_color"]
+        insight = matrix["actionable_insight"]
+
+        sign = "+" if wr_alpha >= 0 else ""
+        header_badge = ft.Container(
+            content=ft.Row(
+                [
+                    ft.Icon(
+                        ft.Icons.AUTO_GRAPH_ROUNDED if wr_alpha >= 0 else ft.Icons.WARNING_AMBER_ROUNDED,
+                        size=13,
+                        color=badge_col,
+                    ),
+                    ft.Text(f"Эдж ликвидности: {sign}{wr_alpha}% WR", size=10, weight=ft.FontWeight.BOLD, color=badge_col, font_family=FONT_MONO),
+                ],
+                spacing=5,
+                tight=True,
+            ),
+            bgcolor=ft.Colors.with_opacity(0.12, badge_col),
+            padding=ft.padding.symmetric(horizontal=8, vertical=4),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.35, badge_col)),
+        )
+
+        kpis = [
+            # 1. Winrate Alpha
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Винрейт со снятием ликвидности", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(f"{sign}{wr_alpha}%", size=9, weight=ft.FontWeight.BOLD, color=badge_col, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, badge_col),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{sw_wr:.1f}%", size=18, weight=ft.FontWeight.BOLD, color=badge_col, font_family=FONT_MONO),
+                        ft.Text(f"Против {naive_wr:.1f}% у обычных пробоев", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            # 2. Absorption Efficiency %
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Эффективность поглощения", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Icon(ft.Icons.SHIELD_ROUNDED, size=14, color="#38BDF8"),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(f"{abs_eff:.1f}%", size=18, weight=ft.FontWeight.BOLD, color="#38BDF8", font_family=FONT_MONO),
+                        ft.Text("Сделки без существенной просадки", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            # 3. Sweep Net PnL vs Naive
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Net PnL со снятием ликвидности", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Text(f"{confl_cnt} сд.", size=9, color=TEXT_MUTED, font_family=FONT_MONO),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(
+                            f"{'+' if sw_net >= 0 else ''}${sw_net:,.2f}",
+                            size=18,
+                            weight=ft.FontWeight.BOLD,
+                            color=PROFIT if sw_net >= 0 else LOSS,
+                            font_family=FONT_MONO,
+                        ),
+                        ft.Text(f"Обычные входы: {'+' if naive_net >= 0 else ''}${naive_net:,.2f}", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+            # 4. Top Institutional Pattern
+            ft.Container(
+                content=ft.Column(
+                    controls=[
+                        ft.Row(
+                            [
+                                ft.Text("Лучший паттерн потока ордеров", size=11, color=TEXT_MUTED, font_family=FONT_FAMILY),
+                                ft.Container(
+                                    content=ft.Text(f"PF {sw_pf:.2f}", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                    bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+                                    padding=ft.padding.symmetric(horizontal=5, vertical=2),
+                                    border_radius=RADIUS_SM,
+                                ),
+                            ],
+                            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        ),
+                        ft.Text(top_arch.split("(")[0].strip(), size=15, weight=ft.FontWeight.BOLD, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                        ft.Text("Максимальная доходность на сделку", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                    ],
+                    spacing=3,
+                ),
+                bgcolor=SURFACE_2,
+                padding=12,
+                border_radius=RADIUS_MD,
+                border=ft.border.all(1, BORDER_SUBTLE),
+                col={"sm": 12, "md": 6, "lg": 3},
+            ),
+        ]
+
+        def _make_arch_chip(label: str, stats: dict, color: str) -> ft.Container:
+            cnt = stats.get("count", 0)
+            wr = stats.get("winrate", 0.0)
+            pnl = stats.get("net_pnl", 0.0)
+            pf = stats.get("profit_factor", 0.0)
+            pnl_s = "+" if pnl >= 0 else ""
+
+            return ft.Container(
+                content=ft.Row(
+                    [
+                        ft.Container(width=6, height=6, border_radius=3, bgcolor=color),
+                        ft.Text(label, size=11, color=TEXT_PRIMARY, weight=ft.FontWeight.W_600, font_family=FONT_FAMILY),
+                        ft.Text(f"({cnt} сд.)", size=10, color=TEXT_MUTED, font_family=FONT_MONO),
+                        ft.Text(f"WR {wr:.0f}%", size=10, weight=ft.FontWeight.BOLD, color=PROFIT if wr >= 50 else LOSS, font_family=FONT_MONO),
+                        ft.Text(f"PF {pf:.2f}", size=10, color=TEXT_SECONDARY, font_family=FONT_MONO),
+                        ft.Text(f"{pnl_s}${pnl:,.1f}", size=10, weight=ft.FontWeight.BOLD, color=PROFIT if pnl >= 0 else LOSS, font_family=FONT_MONO),
+                    ],
+                    spacing=8,
+                    tight=True,
+                ),
+                bgcolor=SURFACE_3,
+                padding=ft.padding.symmetric(horizontal=10, vertical=6),
+                border_radius=RADIUS_SM,
+                border=ft.border.all(1, BORDER_SUBTLE),
+            )
+
+        arch_chips = ft.Row(
+            controls=[
+                _make_arch_chip("Sweep + Order Flow", archs.get("FULL_CONFLUENCE", {}), "#10B981"),
+                _make_arch_chip("Liquidity Sweep Only", archs.get("SWEEP_ONLY", {}), "#38BDF8"),
+                _make_arch_chip("Order Flow Imbalance", archs.get("FLOW_ONLY", {}), "#A855F7"),
+                _make_arch_chip("Наивные пробои", archs.get("NAIVE_ENTRY", {}), "#64748B"),
+            ],
+            wrap=True,
+            spacing=8,
+            run_spacing=8,
+        )
+
+        insight_bar = ft.Container(
+            content=ft.Row(
+                controls=[
+                    ft.Icon(ft.Icons.LIGHTBULB_ROUNDED, size=15, color=badge_col),
+                    ft.Text(
+                        insight,
+                        size=11,
+                        color=TEXT_PRIMARY,
+                        weight=ft.FontWeight.W_500,
+                        font_family=FONT_FAMILY,
+                        expand=True,
+                    ),
+                ],
+                spacing=8,
+            ),
+            bgcolor=SURFACE_2,
+            padding=ft.padding.symmetric(horizontal=12, vertical=8),
+            border_radius=RADIUS_SM,
+            border=ft.border.all(1, ft.Colors.with_opacity(0.3, badge_col)),
+        )
+
+        return ft.Container(
+            content=ft.Column(
+                controls=[
+                    ft.Row(
+                        controls=[
+                            ft.Row(
+                                controls=[
+                                    ft.Icon(ft.Icons.WATERFALL_CHART_ROUNDED, color=ACCENT_PRIMARY, size=18),
+                                    ft.Text("Матрица ликвидности & Footprint Order Flow", size=14, weight=ft.FontWeight.W_600, color=TEXT_PRIMARY, font_family=FONT_FAMILY),
+                                    ft.Container(
+                                        content=ft.Text("ORDER FLOW", size=9, weight=ft.FontWeight.BOLD, color=ACCENT_PRIMARY, font_family=FONT_MONO),
+                                        bgcolor=ft.Colors.with_opacity(0.12, ACCENT_PRIMARY),
+                                        padding=ft.padding.symmetric(horizontal=6, vertical=2),
+                                        border_radius=4,
+                                        border=ft.border.all(1, ft.Colors.with_opacity(0.3, ACCENT_PRIMARY)),
+                                    ),
+                                ],
+                                spacing=8,
+                            ),
+                            header_badge,
+                        ],
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    ),
+                    ft.Divider(color=BORDER_SUBTLE, height=8),
+                    ft.ResponsiveRow(controls=kpis, spacing=10, run_spacing=10),
+                    ft.Container(height=4),
+                    arch_chips,
+                    ft.Container(height=2),
+                    insight_bar,
+                ],
+                spacing=8,
+            ),
+            padding=16,
+            bgcolor=SURFACE_1,
+            border_radius=RADIUS_LG,
+            border=ft.border.all(1, BORDER_SUBTLE),
+        )
+
     def _on_tilt_toggle(self, _):
         """Интерактивный отклик переключателя тильт-фильтра."""
         is_on = self.tilt_switch.value
@@ -5259,11 +5667,29 @@ class DashboardView(ft.Container):
                 padding=12,
             )
 
+        # 5.23 Обновление матрицы снятия ликвидности и потока ордеров (Error Boundary)
+        try:
+            self.liquidity_sweep_container.content = self._build_liquidity_sweep_card(trades)
+        except Exception as ex_ls:
+            logging.exception(f"[DashboardView] Error rendering Liquidity Sweep Card: {ex_ls}")
+            self.liquidity_sweep_container.content = ft.Container(
+                content=ft.Text(f"Ошибка рендеринга матрицы ликвидности: {ex_ls}", color=ft.Colors.ERROR),
+                padding=12,
+            )
+
         # 6. Обновление тепловой карты времени (Error Boundary)
         try:
             self.time_heatmap.set_trades(trades)
         except Exception as ex_hm:
             logging.exception(f"[DashboardView] Error updating Time Heatmap: {ex_hm}")
+
+        # 7. Обновление контролов активной категории в Хабе Аналитики
+        try:
+            self._rebuild_category_tabs()
+            query = getattr(self.category_search_input, "value", "") or ""
+            self.category_modules_column.controls = self._get_category_controls(self.active_category, query)
+        except Exception as ex_cat:
+            logging.exception(f"[DashboardView] Error updating category controls: {ex_cat}")
 
         if self.page:
             self.update()

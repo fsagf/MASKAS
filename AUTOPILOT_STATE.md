@@ -2,9 +2,9 @@
 *Autonomous Principal Python/Flet Architect & Quant Engineer Loop*
 
 ## Current Phase
-- **Iteration:** 27 (Completed) -> Starting Iteration 28
-- **Current Phase:** Phase 1: Competitor R&D & Implementation
-- **Status:** All 58 Tests Green (100% Passing). Trade Management Audit & BE Choke Engine Deployed.
+- **Iteration:** 28 (Completed) -> Starting Iteration 29
+- **Current Phase:** Phase 1: Competitor R&D & Implementation (UI/UX Architecture Hub & Order Flow Analytics)
+- **Status:** All 59 Tests Green (100% Passing). Modular Analytics Hub with Category Tabs, Search Filter & TradeZella Liquidity Sweep Engine Deployed.
 - **Active Branch:** `redesign` (local) / `main` (mirror: `C:\Users\maksi\OneDrive\Documents\GitHub\MASKAS`)
 - **Server Status:** 🟢 Active & Healthy on `http://localhost:8550` and LAN `http://192.168.100.6:8550` (Daemon task running)
 
@@ -191,17 +191,33 @@
   - Calculates Management Alpha / Drag ($ difference between realized managed PnL and theoretical untouched bracket PnL).
   - Created `_build_trade_management_card` in `ui/views/dashboard.py` featuring 4 responsive KPI cards, management alpha badge, scale-out winrate chips, and actionable execution advice bar.
   - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
-- [x] **Total QA Suite (58 tests):**
+- [x] **Modular Analytics Hub Architecture & UI/UX Redesign (Iteration 28):**
+  - Resolved information overload and endless vertical scrolling: re-architected `DashboardView` from a raw 25-card stack into a modular institutional Analytics Hub.
+  - Implemented Segmented Pill Category Tabs:
+    - ⏱️ **Время & Сессии (5 модулей)**: Сессионная матрица, Перекрытие London/NY, Время удержания, 7x24 Heatmap, Фазы месяца.
+    - 🧠 **Психология & Риск (5 модулей)**: Аудит дисциплины & тильта, Утечки торгового плана, Просадка & Ulcer Index, Сайзинг-симулятор, Пре-трейд рутина.
+    - 🎯 **Сетапы & Альфа (8 модулей)**: Лидерборд стратегий, Грейдинг сетапов (A+/B/C), Снятие ликвидности & Footprint, Облако тегов, Факторный IC, Рыночные режимы, MTF Confluence, Аллокация активов.
+    - ⚡ **Исполнение & Сделки (6 модулей)**: Аудит управления позицией (BE Choke & Trailing), Точки входа SL/TP, Экскурсии MAE/MFE, R-Multiple хвосты, R:R Efficiency, Скользящий эдж.
+    - 🏆 **Проп-Трейдинг (1 модуль)**: Радар готовности к челленджам и лимиты потерь.
+    - 📑 **Все модули сразу (25 модулей)**: Полное развернутое полотно для единого сквозного аудита.
+  - Added instant search filter bar (`category_search_input`): dynamically filters matching analytical modules in real time (e.g. typing "тильт", "стоп", "ic").
+  - Seamless zero-latency category switching without page reloads or UI flickering.
+- [x] **TradeZella Liquidity Sweep & Order Flow Footprint Imbalance Confluence Matrix (Iteration 28):**
+  - Implemented `AnalyticsService.calculate_liquidity_sweep_matrix(trades)`: models institutional liquidity raid detection and delta absorption footprint confluence.
+  - Segregates 4 order flow execution archetypes: `FULL_CONFLUENCE` (Sweep + Delta Imbalance), `SWEEP_ONLY` (Turtle Soup / SFP), `FLOW_ONLY` (Footprint Imbalance / Absorption), and `NAIVE_ENTRY` (raw breakouts without confirmation).
+  - Computes Winrate Alpha (+% WR differential of sweep setups over naive entries), Absorption Efficiency % (% of sweep trades reacting with minimal adverse excursion MAE <= 0.5), Sweep Net PnL, and Optimal Order Flow Pattern.
+  - Created `_build_liquidity_sweep_card` in `ui/views/dashboard.py` featuring 4 responsive KPI cards, liquidity edge badge, archetype breakdown chips, and actionable execution advice bar.
+  - Integrated into `DashboardView` and covered with 100% green tests in `tests/test_quant_math.py` and `tests/test_headless_ui_render.py`.
+- [x] **Total QA Suite (59 tests):**
   - Level 1: Static Analysis & Architecture (`tests/test_static_architecture.py`) — 3 tests.
-  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 31 tests (including SQN, Session Matrix, Time Heatmap, Kelly/Streaks, Strategy Leaderboard, Duration Matrix, Asset Allocation, Psychology Matrix, Drawdown & Recovery, MAE/MFE Excursion, Monthly Phase, Position Sizing Simulator, Market Regime Matrix, R-Multiple Distribution, R:R Execution Efficiency, Rule Violation Matrix, MTF Alignment Matrix, Pre-Trade Compliance Matrix, Session Overlap Matrix, Setup Quality Grading Matrix, Tag Attribution Matrix, Rolling Edge Decay Matrix, Prop Consistency Radar, Order Placement Efficiency, Factor Information Coefficient, Trade Management Matrix).
+  - Level 2: Quant & Math Engine (`tests/test_quant_math.py`) — 32 tests (including Liquidity Sweep Matrix and all prior quant engines).
   - Level 3: Database & ORM Integration (`tests/test_database_integration.py`) — 4 tests.
   - Level 4: Async & Resilience (`tests/test_async_resilience.py`) — 4 tests.
-  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Trade Management Card render).
+  - Level 5: Headless UI Render (`tests/test_headless_ui_render.py`) — 4 tests (including Category Tabs navigation, search filtering, and Liquidity Sweep Card render).
   - Legacy regression suite — 12 tests.
 
 ---
 
-## Competitor Backlog (R&D for Iteration 28+)
-- [ ] **TradeZella:** Liquidity Sweep & Order Flow Footprint Imbalance Confluence Matrix.
-- [ ] **TradeMetria:** Commissions, Slippage & Broker Cost Drag Decomposition Engine.
-- [ ] **QuantConnect:** Multi-Factor Alpha Attribution & Cross-Asset Beta Neutralizer.
+## Competitor Backlog (R&D for Iteration 29+)
+- [ ] **TradeMetria (Iteration 29):** Commissions, Slippage & Broker Cost Drag Decomposition Engine (`calculate_broker_cost_drag_matrix`).
+- [ ] **QuantConnect (Iteration 30):** Multi-Factor Alpha Attribution & Cross-Asset Beta Neutralizer (`calculate_multi_factor_alpha_attribution`).

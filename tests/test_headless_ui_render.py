@@ -157,6 +157,27 @@ def test_dashboard_view_headless_render():
     assert mgmt_card is not None
     assert dash.trade_management_container is not None
 
+    # Verify Liquidity sweep & footprint order flow card renders cleanly
+    sweep_card = dash._build_liquidity_sweep_card(trades=[])
+    assert sweep_card is not None
+    assert dash.liquidity_sweep_container is not None
+
+    # Verify Analytics Hub modular tabs navigation and search
+    assert hasattr(dash, "category_tabs_row")
+    assert hasattr(dash, "category_modules_column")
+    assert hasattr(dash, "category_search_input")
+    assert dash.active_category == "sessions"
+    assert len(dash.category_tabs_row.controls) == 6
+
+    # Verify category switching
+    dash._on_category_select("psychology")
+    assert dash.active_category == "psychology"
+    assert len(dash.category_modules_column.controls) > 0
+
+    # Verify category search filtering
+    filtered_ctrls = dash._get_category_controls("all", "тильт")
+    assert len(filtered_ctrls) > 0
+
     # Verify time heatmap component renders cleanly
     assert dash.time_heatmap.content is not None
 

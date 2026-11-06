@@ -1254,6 +1254,49 @@ def test_trade_management_matrix():
     assert len(mat["management_insight"]) > 10
 
 
+def test_liquidity_sweep_matrix():
+    """Verify TradeZella liquidity sweep and order flow footprint confluence calculation."""
+    # 1. Empty trades edge case
+    empty_res = AnalyticsService.calculate_liquidity_sweep_matrix([])
+    assert empty_res["total_trades"] == 0
+    assert empty_res["sweep_winrate"] == 0.0
+    assert empty_res["top_archetype"] == "N/A"
+
+    # 2. Confluence trades
+    t_full = Trade(direction="LONG", entry_price=100.0, exit_price=150.0, volume=10.0, notes="Liquidity sweep + delta imbalance cluster absorption")
+    t_full.mae = 0.2
+    t_full.r_multiple = 3.5
+
+    t_sweep = Trade(direction="LONG", entry_price=100.0, exit_price=130.0, volume=10.0, notes="Turtle soup liquidity raid", strategy_tag="ICT SMC")
+    t_sweep.mae = 0.3
+    t_sweep.r_multiple = 2.0
+
+    t_flow = Trade(direction="SHORT", entry_price=200.0, exit_price=180.0, volume=10.0, notes="Order flow footprint absorption on high volume")
+    t_flow.mae = 0.8
+    t_flow.r_multiple = 1.5
+
+    t_naive_loss = Trade(direction="LONG", entry_price=100.0, exit_price=80.0, volume=10.0, notes="Breakout entry on moving average")
+    t_naive_loss.mae = 2.0
+    t_naive_loss.r_multiple = -1.0
+
+    trades = [t_full, t_sweep, t_flow, t_naive_loss]
+    res = AnalyticsService.calculate_liquidity_sweep_matrix(trades)
+
+    assert res["total_trades"] == 4
+    assert res["confluence_trades_count"] == 2  # t_full and t_sweep
+    assert res["sweep_winrate"] == 100.0
+    assert res["naive_winrate"] == 0.0
+    assert res["winrate_alpha"] == 100.0
+    assert res["absorption_efficiency_pct"] == 100.0  # both t_full and t_sweep had mae <= 0.5
+    assert "FULL_CONFLUENCE" in res["archetypes"]
+    assert res["archetypes"]["FULL_CONFLUENCE"]["count"] == 1
+    assert res["archetypes"]["SWEEP_ONLY"]["count"] == 1
+    assert res["archetypes"]["FLOW_ONLY"]["count"] == 1
+    assert res["archetypes"]["NAIVE_ENTRY"]["count"] == 1
+    assert len(res["actionable_insight"]) > 10
+
+
+
 
 
 

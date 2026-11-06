@@ -3729,6 +3729,178 @@ class AnalyticsService:
         }
 
     @classmethod
+    def calculate_liquidity_sweep_matrix(cls, trades: List[Trade]) -> Dict[str, Any]:
+        """
+        Матрица снятия ликвидности и дисбаланса футпринта (TradeZella & Bookmap Order Flow Engine).
+        Оценивает качество входов по институциональным паттернам:
+        - Liquidity Sweep / Stop Hunt: ложные пробои уровней, снятие ликвидности (Sweep, Turtle Soup, SFP).
+        - Order Flow Imbalance: дисбаланс дельты в кластерах и поглощение лимитным ордером (Absorption).
+        - Полная конвергенция (Full Confluence): сделки с обоими факторами.
+        - Сравнение метрик (Winrate, Profit Factor, Avg R) с наивными пробоями без подтверждения.
+        """
+        if not trades:
+            return {
+                "total_trades": 0,
+                "confluence_trades_count": 0,
+                "sweep_winrate": 0.0,
+                "naive_winrate": 0.0,
+                "winrate_alpha": 0.0,
+                "sweep_profit_factor": 0.0,
+                "naive_profit_factor": 0.0,
+                "sweep_net_pnl": 0.0,
+                "naive_net_pnl": 0.0,
+                "sweep_avg_r": 0.0,
+                "naive_avg_r": 0.0,
+                "absorption_efficiency_pct": 0.0,
+                "top_archetype": "N/A",
+                "top_archetype_key": "NAIVE_ENTRY",
+                "archetypes": {},
+                "actionable_insight": "Недостаточно данных для анализа снятия ликвидности и потока ордеров",
+                "badge_color": "#94A3B8",
+            }
+
+        archetypes = {
+            "FULL_CONFLUENCE": [],   # Sweep + Order Flow Delta Imbalance
+            "SWEEP_ONLY": [],        # Liquidity Sweep / SFP / Stop Run
+            "FLOW_ONLY": [],         # Footprint Imbalance / Absorption / Delta
+            "NAIVE_ENTRY": [],       # No order flow or sweep confluences
+        }
+
+        sweep_keywords = ("sweep", "ликвидн", "сняти", "stop_hunt", "охота", "sfp", "манипуляц", "raid", "soup", "девиаци")
+        flow_keywords = ("flow", "footprint", "футпринт", "delta", "дельта", "дисбаланс", "imbalance", "поглощен", "absorption", "кластер")
+
+        for t in trades:
+            notes = str(getattr(t, "notes", "") or "").lower()
+            strat = str(getattr(t, "strategy_tag", "") or "").lower()
+            tags = getattr(t, "tags", []) or []
+            tag_str = " ".join(str(tg).lower() for tg in tags)
+            combined_text = f"{notes} {strat} {tag_str}"
+
+            has_sweep = any(k in combined_text for k in sweep_keywords)
+            has_flow = any(k in combined_text for k in flow_keywords)
+
+            # Дополнительное эвристическое определение: если стратегия SMC / ICT / Turtle Soup
+            if "smc" in combined_text or "ict" in combined_text or "turtle" in combined_text:
+                has_sweep = True
+
+            if has_sweep and has_flow:
+                archetypes["FULL_CONFLUENCE"].append(t)
+            elif has_sweep:
+                archetypes["SWEEP_ONLY"].append(t)
+            elif has_flow:
+                archetypes["FLOW_ONLY"].append(t)
+            else:
+                archetypes["NAIVE_ENTRY"].append(t)
+
+        def calc_group_stats(group_trades: List[Trade]) -> Dict[str, Any]:
+            if not group_trades:
+                return {
+                    "count": 0,
+                    "winrate": 0.0,
+                    "net_pnl": 0.0,
+                    "profit_factor": 0.0,
+                    "avg_r": 0.0,
+                    "wins": 0,
+                    "losses": 0,
+                }
+            wins = [t for t in group_trades if (t.net_pnl or 0.0) > 0]
+            losses = [t for t in group_trades if (t.net_pnl or 0.0) < 0]
+            gp = sum(float(t.net_pnl or 0.0) for t in wins)
+            gl = abs(sum(float(t.net_pnl or 0.0) for t in losses))
+            pf = round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0.0)
+            net = round(sum(float(t.net_pnl or 0.0) for t in group_trades), 2)
+            wr = round(len(wins) / len(group_trades) * 100, 1)
+            r_vals = [float(getattr(t, "r_multiple", 0.0) or 0.0) for t in group_trades]
+            avg_r = round(sum(r_vals) / len(r_vals), 2) if r_vals else 0.0
+
+            return {
+                "count": len(group_trades),
+                "winrate": wr,
+                "net_pnl": net,
+                "profit_factor": pf,
+                "avg_r": avg_r,
+                "wins": len(wins),
+                "losses": len(losses),
+            }
+
+        archetype_stats = {
+            "FULL_CONFLUENCE": calc_group_stats(archetypes["FULL_CONFLUENCE"]),
+            "SWEEP_ONLY": calc_group_stats(archetypes["SWEEP_ONLY"]),
+            "FLOW_ONLY": calc_group_stats(archetypes["FLOW_ONLY"]),
+            "NAIVE_ENTRY": calc_group_stats(archetypes["NAIVE_ENTRY"]),
+        }
+
+        # Сводные группы: Со снятием ликвидности (Full + Sweep) против наивных входов
+        sweep_all_trades = archetypes["FULL_CONFLUENCE"] + archetypes["SWEEP_ONLY"]
+        sweep_stats = calc_group_stats(sweep_all_trades)
+        naive_stats = archetype_stats["NAIVE_ENTRY"]
+
+        # Если нет наивных или нет sweep, используем общую базу для относительного сравнения
+        if not sweep_all_trades:
+            sweep_stats = calc_group_stats(trades)
+        if not archetypes["NAIVE_ENTRY"]:
+            naive_stats = calc_group_stats(trades)
+
+        wr_alpha = round(sweep_stats["winrate"] - naive_stats["winrate"], 1)
+
+        # Эффективность поглощения (Absorption): % прибыльных сделок со снятием, у которых MAE был минимален
+        sweep_absorption_count = 0
+        for t in sweep_all_trades:
+            mae = float(getattr(t, "mae", 0.0) or 0.0)
+            net_p = float(t.net_pnl or 0.0)
+            if net_p > 0 and mae <= 0.5:
+                sweep_absorption_count += 1
+        absorption_eff = round((sweep_absorption_count / len(sweep_all_trades) * 100), 1) if sweep_all_trades else 0.0
+
+        # Поиск лучшего паттерна
+        active_archetypes = [(k, v) for k, v in archetype_stats.items() if v["count"] > 0]
+        if active_archetypes:
+            best_arch_key = max(active_archetypes, key=lambda x: (x[1]["profit_factor"], x[1]["net_pnl"]))[0]
+        else:
+            best_arch_key = "NAIVE_ENTRY"
+
+        labels_ru = {
+            "FULL_CONFLUENCE": "Sweep + Order Flow (Полный стек)",
+            "SWEEP_ONLY": "Liquidity Sweep (Снятие ликвидности)",
+            "FLOW_ONLY": "Order Flow (Дисбаланс кластеров)",
+            "NAIVE_ENTRY": "Обычный вход (Без подтверждений)",
+        }
+        best_arch_label = labels_ru.get(best_arch_key, best_arch_key)
+
+        if wr_alpha >= 0:
+            badge_color = "#10B981"
+            insight = (
+                f"Снятие ликвидности дает эдж +{wr_alpha}% к винрейту (WR {sweep_stats['winrate']}% против {naive_stats['winrate']}%). "
+                f"Лучший паттерн: {best_arch_label} с PF {archetype_stats[best_arch_key]['profit_factor']}."
+            )
+        else:
+            badge_color = "#F59E0B"
+            insight = (
+                f"Сделки без фильтра ликвидности показывают равный результат. "
+                f"Рекомендуется дожидаться истинного поглощения дельты перед входом."
+            )
+
+        return {
+            "total_trades": len(trades),
+            "confluence_trades_count": len(sweep_all_trades),
+            "sweep_winrate": sweep_stats["winrate"],
+            "naive_winrate": naive_stats["winrate"],
+            "winrate_alpha": wr_alpha,
+            "sweep_profit_factor": sweep_stats["profit_factor"],
+            "naive_profit_factor": naive_stats["profit_factor"],
+            "sweep_net_pnl": sweep_stats["net_pnl"],
+            "naive_net_pnl": naive_stats["net_pnl"],
+            "sweep_avg_r": sweep_stats["avg_r"],
+            "naive_avg_r": naive_stats["avg_r"],
+            "absorption_efficiency_pct": absorption_eff,
+            "top_archetype": best_arch_label,
+            "top_archetype_key": best_arch_key,
+            "archetypes": archetype_stats,
+            "actionable_insight": insight,
+            "badge_color": badge_color,
+        }
+
+    @classmethod
     def trades_to_dataframe(cls, trades: List[Trade]) -> pd.DataFrame:
         if not trades:
             return pd.DataFrame(columns=[
